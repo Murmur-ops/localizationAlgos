@@ -12,16 +12,10 @@ Key optimizations:
 
 import numpy as np
 from mpi4py import MPI
-import scipy.linalg as la
-import scipy.sparse as sp
-from scipy.sparse import csr_matrix, coo_matrix
 import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, Set
 import logging
-
-# Configure MPI for performance
-MPI.Init_thread(MPI.THREAD_MULTIPLE)
 
 logger = logging.getLogger(__name__)
 
@@ -471,7 +465,7 @@ class OptimizedMPISNL:
         
         # Apply constraints based on distance measurements
         for anchor_id in sensor.anchor_neighbors:
-            anchor_pos = anchor_positions[anchor_id]
+            anchor_pos = self.anchor_positions[anchor_id]
             measured_dist = sensor.anchor_distances[anchor_id]
             
             # Project to satisfy distance constraint
