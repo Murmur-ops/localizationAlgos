@@ -6,7 +6,7 @@ Based on the paper by Barkley and Bassett (2025)
 """
 
 import numpy as np
-from mpi4py import MPI
+# from mpi4py import MPI  # Removed - using threading instead
 import scipy.linalg as la
 import scipy.sparse as sp
 import time
