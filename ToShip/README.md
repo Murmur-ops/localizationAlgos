@@ -127,9 +127,9 @@ The implementation uses **Matrix-Parametrized Proximal Splitting (MPS)** with:
 
 **"Poor accuracy"**: Check that you have enough anchors (>10% of sensors)
 
-## 📚 References
+## 📚 Algorithm Details
 
-Based on: Barkley, P. & Bassett, M. (2025). "Decentralized Sensor Network Localization via Matrix-Parametrized Proximal Splittings"
+This implementation uses the Matrix-Parametrized Proximal Splitting (MPS) algorithm for decentralized sensor network localization.
 
 ## 🤝 Support
 

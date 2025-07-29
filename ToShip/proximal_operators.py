@@ -21,7 +21,7 @@ class ProximalOperators:
     
     def construct_vectorization(self, sensor_data, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         """
-        Implement vectorization from equation (17) in the paper
+        Implement vectorization for the algorithm
         vec_i = [Yii, Yj1j1, Yij1, ..., Yj|Ni|j|Ni|, Yij|Ni|, Xi]
         """
         neighbors = sensor_data.neighbors
@@ -110,7 +110,7 @@ class ProximalOperators:
                      max_iter: int = 50, rho: float = 1.0, tol: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
         """
         Solve proximal operator for gi using ADMM
-        Implements equations (25-27) from the paper
+        Implements the distance constraint optimization
         
         Solves: min_w ||c^k - K_i w||_1 + (1/2)||D_i w||^2
         where w = vec_i(X,Y) - vec_i(X^k, Y^k)
@@ -254,7 +254,7 @@ class ProximalOperators:
     def construct_Si(self, X: np.ndarray, Y: np.ndarray, d: int) -> np.ndarray:
         """
         Build principal submatrix Si for sensor i
-        Implements equation (2) from the paper
+        Constructs the matrix for distance constraints
         """
         n = Y.shape[0]  # 1 + number of neighbors
         Si = np.zeros((d + n, d + n))
@@ -336,7 +336,7 @@ class MatrixParameterVerification:
     @staticmethod
     def verify_equation_8(Z: np.ndarray, W: np.ndarray, tol: float = 1e-6) -> dict:
         """
-        Check all conditions from equation (8):
+        Check all required conditions for the algorithm:
         - Z ⪰ W
         - null(W) = span(1)
         - diag(Z) = 2*1

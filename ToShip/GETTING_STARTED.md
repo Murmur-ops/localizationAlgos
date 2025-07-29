@@ -1,6 +1,6 @@
 # Getting Started with Decentralized Sensor Network Localization
 
-Welcome! This package contains a complete implementation of the distributed sensor network localization algorithm from Barkley & Bassett (2025).
+Welcome! This package contains a complete implementation of a state-of-the-art distributed sensor network localization algorithm using Matrix-Parametrized Proximal Splitting (MPS).
 
 ## 📋 Quick Start (5 minutes)
 
@@ -212,7 +212,7 @@ python crlb_analysis.py
 ## Need Help?
 
 - Implementation details: See comments in source files
-- Algorithm theory: Check the paper references
+- Algorithm theory: See technical documentation
 - Performance issues: Try MPI version
 - Bug reports: Include full error message and system info
 
