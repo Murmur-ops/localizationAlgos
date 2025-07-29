@@ -1,0 +1,7 @@
+# Core dependencies for Decentralized SNL
+numpy>=1.20.0
+scipy>=1.7.0
+matplotlib>=3.4.0
+
+# Optional: For MPI support (install separately based on platform)
+# mpi4py>=3.1.0  # Requires MPI installation first
