@@ -241,9 +241,9 @@ def generate_crlb_comparison():
     ax.set_xlim(-0.01, 0.22)
     ax.set_ylim(0, 0.32)
     
-    # Add summary box
+    # Add summary box - positioned higher for better visibility
     summary_text = "MPS Efficiency:\n1% noise: 85%\n5% noise: 83%\n20% noise: 80%"
-    ax.text(0.98, 0.4, summary_text, transform=ax.transAxes,
+    ax.text(0.98, 0.75, summary_text, transform=ax.transAxes,
             bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.9),
             fontsize=10, ha='right', va='center')
     

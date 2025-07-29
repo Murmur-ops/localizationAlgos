@@ -33,7 +33,9 @@ python simple_example.py
 
 ### Documentation
 - **`GETTING_STARTED.md`** - Comprehensive guide
+- **`QUICK_REFERENCE.md`** - One-page command reference
 - **`requirements.txt`** - Python dependencies
+- **`sample_outputs/`** - Description of generated visualizations
 
 ## 🎯 Which File Should I Use?
 

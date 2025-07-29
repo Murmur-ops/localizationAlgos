@@ -108,13 +108,16 @@ def create_crlb_line_comparison():
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
                          edgecolor='red', alpha=0.9))
     
-    # Add performance gap annotation
+    # Add performance gap annotation with corrected positioning
     mid_idx = n_sensors // 2
     gap_size = (algorithm_errors[mid_idx] - crlbs_sorted[mid_idx]) * 1000
-    ax1.annotate('', xy=(mid_idx, crlbs_sorted[mid_idx] * 1000),
-                xytext=(mid_idx, algorithm_errors[mid_idx] * 1000),
+    # Draw double-sided arrow spanning the gap
+    ax1.annotate('', xy=(mid_idx + 1, crlbs_sorted[mid_idx] * 1000),
+                xytext=(mid_idx + 1, algorithm_errors[mid_idx] * 1000),
                 arrowprops=dict(arrowstyle='<->', color='gray', lw=2))
-    ax1.text(mid_idx + 0.5, (algorithm_errors[mid_idx] + crlbs_sorted[mid_idx]) * 500,
+    # Position text at the midpoint of the gap
+    text_y_pos = (algorithm_errors[mid_idx] + crlbs_sorted[mid_idx]) * 1000 / 2
+    ax1.text(mid_idx + 1.5, text_y_pos,
             f'Gap:\n{gap_size:.1f}mm', fontsize=10, color='gray', 
             ha='left', va='center')
     
