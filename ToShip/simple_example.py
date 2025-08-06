@@ -6,7 +6,7 @@ No MPI required - runs on a single machine
 
 import numpy as np
 import matplotlib.pyplot as plt
-from snl_threaded_standalone import SNLProblem, StandaloneDistributedSNL
+from snl_threaded_standalone import SNLProblem, ThreadedSNLFull
 
 def main():
     """Run a simple localization example"""
@@ -32,11 +32,15 @@ def main():
     
     # Step 2: Create and run solver
     print("\nStep 2: Initializing distributed solver...")
-    solver = StandaloneDistributedSNL(problem)
+    solver = ThreadedSNLFull(problem)
     
     print("\nStep 3: Generating random sensor network...")
-    solver.generate_network()
-    initial_positions = solver.get_current_positions()
+    solver.generate_network(seed=42)
+    
+    # Get initial positions (random initialization)
+    initial_positions = np.zeros((problem.n_sensors, problem.d))
+    for i, sensor in solver.sensors.items():
+        initial_positions[i] = sensor.sensor_data.X
     
     # Calculate initial error
     initial_errors = []
@@ -47,13 +51,16 @@ def main():
     print(f"  - Initial RMSE: {initial_rmse:.4f}")
     
     print("\nStep 4: Running MPS localization algorithm...")
-    print("  Progress:")
+    print("  (Note: Threading version is slower than MPI)")
+    print("  Progress: Running... (this may take 10-30 seconds)")
     
-    # Run algorithm with progress updates
-    state = solver.run_mps_distributed(max_iter=100, verbose=True)
+    # Run algorithm
+    mps_results = solver.matrix_parametrized_splitting_threaded()
     
     # Get final positions
-    final_positions = solver.get_current_positions()
+    final_positions = np.zeros((problem.n_sensors, problem.d))
+    for i, (X, Y) in mps_results.items():
+        final_positions[i] = X
     
     # Calculate final error
     final_errors = []
@@ -62,7 +69,7 @@ def main():
         final_errors.append(error)
     final_rmse = np.sqrt(np.mean(np.array(final_errors)**2))
     
-    print(f"\n✓ Algorithm converged in {state.iteration} iterations")
+    print(f"\n✓ Algorithm converged in {solver.mps_state.iteration} iterations")
     print(f"  - Final RMSE: {final_rmse:.4f}")
     print(f"  - Improvement: {(initial_rmse - final_rmse)/initial_rmse * 100:.1f}%")
     
@@ -129,25 +136,27 @@ def main():
     print("  - Saved visualization to 'simple_example_results.png'")
     
     # Show convergence
-    fig2, ax = plt.subplots(figsize=(8, 6))
-    iterations = range(len(state.error_history))
-    ax.semilogy(iterations, state.error_history, 'b-', linewidth=2)
-    ax.set_xlabel('Iteration')
-    ax.set_ylabel('RMSE (log scale)')
-    ax.set_title('Algorithm Convergence')
-    ax.grid(True, alpha=0.3)
-    plt.savefig('simple_example_convergence.png', dpi=150, bbox_inches='tight')
-    print("  - Saved convergence plot to 'simple_example_convergence.png'")
+    if solver.mps_state.error_history:
+        fig2, ax = plt.subplots(figsize=(8, 6))
+        iterations = range(len(solver.mps_state.error_history))
+        ax.semilogy(iterations, solver.mps_state.error_history, 'b-', linewidth=2)
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('RMSE (log scale)')
+        ax.set_title('Algorithm Convergence')
+        ax.grid(True, alpha=0.3)
+        plt.savefig('simple_example_convergence.png', dpi=150, bbox_inches='tight')
+        print("  - Saved convergence plot to 'simple_example_convergence.png'")
     
     print("\n=== Example Complete! ===")
     print("\nNext steps:")
-    print("1. Try changing the number of sensors or anchors")
-    print("2. Adjust the noise_factor to see how it affects accuracy")
-    print("3. Modify communication_range to change network connectivity")
-    print("4. For larger networks, use the MPI version (snl_mpi_optimized.py)")
+    print("1. For faster execution, use the MPI version:")
+    print("   mpirun -np 4 python3 snl_mpi_optimized.py")
+    print("2. Try changing the number of sensors or anchors")
+    print("3. Adjust the noise_factor to see how it affects accuracy")
+    print("4. Modify communication_range to change network connectivity")
     
-    # Optionally show plots
-    # plt.show()
+    # Clean up
+    solver.shutdown()
 
 if __name__ == "__main__":
     main()

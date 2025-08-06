@@ -106,7 +106,8 @@ class OptimizedMPISNL:
         if sensor_id < remainder * (sensors_per_proc + 1):
             return sensor_id // (sensors_per_proc + 1)
         else:
-            return (sensor_id - remainder) // sensors_per_proc + remainder
+            adjusted_id = sensor_id - remainder * (sensors_per_proc + 1)
+            return remainder + adjusted_id // sensors_per_proc
     
     def generate_network(self, anchor_positions: Optional[np.ndarray] = None):
         """Generate network with efficient neighbor discovery"""

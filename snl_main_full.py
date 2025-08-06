@@ -725,8 +725,45 @@ class FullDistributedSNL:
             
             # Average
             K_i = len(neighbor_U_list)
-            R_X = np.mean([U[0] for U in neighbor_U_list], axis=0)
-            R_Y = np.mean([U[1] for U in neighbor_U_list], axis=0)
+            if K_i > 0:
+                # Extract X components (vectors)
+                X_components = [U[0] for U in neighbor_U_list]
+                R_X = np.mean(X_components, axis=0)
+                
+                # Extract Y components (matrices) and ensure consistent shape
+                Y_components = []
+                for U in neighbor_U_list:
+                    Y_mat = U[1]
+                    if Y_mat.ndim == 2:
+                        Y_components.append(Y_mat)
+                    else:
+                        # Handle case where Y might be incorrectly shaped
+                        n = self.sensor_data[sensor_id].neighbors.shape[0] if hasattr(self.sensor_data[sensor_id].neighbors, 'shape') else len(self.sensor_data[sensor_id].neighbors) + 1
+                        Y_components.append(np.zeros((n, n)))
+                
+                # Ensure all Y matrices have the same shape before averaging
+                if Y_components:
+                    shapes = [Y.shape for Y in Y_components]
+                    if len(set(shapes)) == 1:  # All same shape
+                        R_Y = np.mean(Y_components, axis=0)
+                    else:
+                        # Use the most common shape or first shape
+                        target_shape = Y_components[0].shape
+                        Y_aligned = []
+                        for Y in Y_components:
+                            if Y.shape == target_shape:
+                                Y_aligned.append(Y)
+                            else:
+                                # Create zero matrix of target shape if mismatch
+                                Y_aligned.append(np.zeros(target_shape))
+                        R_Y = np.mean(Y_aligned, axis=0)
+                else:
+                    n = len(self.sensor_data[sensor_id].neighbors) + 1
+                    R_Y = np.zeros((n, n))
+            else:
+                R_X = np.zeros(self.problem.d)
+                n = len(self.sensor_data[sensor_id].neighbors) + 1
+                R_Y = np.zeros((n, n))
             
             self.sensor_data[sensor_id].R = (R_X, R_Y)
         

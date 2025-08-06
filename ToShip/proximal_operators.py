@@ -357,7 +357,7 @@ class MatrixParameterVerification:
         try:
             eigenvalues = la.eigvalsh(Z - W)
             results['Z_succeq_W'] = np.all(eigenvalues >= -tol)
-        except:
+        except la.LinAlgError:
             results['Z_succeq_W'] = False
         
         # Check null(W) = span(1)

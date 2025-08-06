@@ -9,7 +9,7 @@ This package contains everything you need to run the decentralized sensor networ
 pip install -r requirements.txt
 
 # 2. Run the simple example
-python simple_example.py
+python3 simple_example.py
 
 # 3. Check the generated images
 # - simple_example_results.png
@@ -41,9 +41,9 @@ python simple_example.py
 
 | Your Situation | Use This File | Command |
 |----------------|---------------|---------|
-| Just want to try it | `simple_example.py` | `python simple_example.py` |
-| Small network (<50 sensors) | `snl_threaded_standalone.py` | `python snl_threaded_standalone.py` |
-| Large network (50-1000 sensors) | `snl_mpi_optimized.py` | `mpirun -np 4 python snl_mpi_optimized.py` |
+| Just want to try it | `simple_example.py` | `python3 simple_example.py` |
+| Small network (<50 sensors) | `snl_threaded_standalone.py` | `python3 snl_threaded_standalone.py` |
+| Large network (50-1000 sensors) | `snl_mpi_optimized.py` | `mpirun -np 4 python3 snl_mpi_optimized.py` |
 | Understanding the algorithm | `snl_main_full.py` | Read the extensive comments |
 
 ## 📊 Expected Performance

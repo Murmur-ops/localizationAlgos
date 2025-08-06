@@ -53,7 +53,7 @@ def check_compatibility():
                 print(f"✓ {mpi_exe}: Available")
             else:
                 print(f"⚠ {mpi_exe}: Not found in PATH")
-        except:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"⚠ {mpi_exe}: Not available")
             
     except ImportError:
@@ -105,7 +105,7 @@ def check_compatibility():
             import mpi4py
             print("\n✓ MPI version (requires MPI setup):")
             print("  mpirun -np 4 python snl_mpi_optimized.py")
-        except:
+        except ImportError:
             print("\n⚠ MPI version requires mpi4py installation")
     else:
         print("\n⚠ Please install missing core dependencies first:")
