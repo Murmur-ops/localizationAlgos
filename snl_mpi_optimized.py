@@ -16,6 +16,8 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, Set
 import logging
+import json
+import pickle
 
 logger = logging.getLogger(__name__)
 
@@ -519,27 +521,31 @@ def main():
     """Test optimized MPI implementation"""
     
     problem_params = {
-        'n_sensors': 100,
-        'n_anchors': 10,
+        'n_sensors': 20,
+        'n_anchors': 4,
         'd': 2,
-        'communication_range': 0.3,
+        'communication_range': 0.4,
         'noise_factor': 0.05,
         'gamma': 0.999,
         'alpha_mps': 10.0,
-        'max_iter': 500,
+        'max_iter': 100,
         'tol': 1e-4
     }
     
     # Create optimized solver
     solver = OptimizedMPISNL(problem_params)
+    print(f"Process {solver.rank}: Initialized")
     
     # Generate network
+    print(f"Process {solver.rank}: Generating network...")
     solver.generate_network()
+    print(f"Process {solver.rank}: Network generated")
     
     # Compute matrix parameters
     if solver.rank == 0:
         print("Computing matrix parameters...")
     solver.compute_matrix_parameters_optimized()
+    print(f"Process {solver.rank}: Matrix parameters computed")
     
     # Run MPS algorithm
     if solver.rank == 0:
@@ -561,6 +567,47 @@ def main():
         print(f"\nTiming breakdown:")
         for category, time_spent in results['timing_stats'].items():
             print(f"  {category}: {time_spent:.2f}s ({100*time_spent/total_time:.1f}%)")
+        
+        # Save results to file for visualization
+        simulation_data = {
+            'problem_params': problem_params,
+            'results': results,
+            'total_time': total_time,
+            'true_positions': {k: v.tolist() for k, v in solver.true_positions.items()},
+            'anchor_positions': solver.anchor_positions.tolist(),
+            'final_positions': {}
+        }
+        
+        # Collect final positions from all processes
+        all_final_positions = solver.comm.gather(
+            {sid: solver.sensor_data[sid].X_k.tolist() for sid in solver.local_sensors},
+            root=0
+        )
+        
+        if solver.rank == 0:
+            for pos_dict in all_final_positions:
+                simulation_data['final_positions'].update(pos_dict)
+            
+            # Save as pickle for complete data
+            with open('mpi_simulation_results.pkl', 'wb') as f:
+                pickle.dump(simulation_data, f)
+            
+            # Save summary as JSON for easy reading
+            summary_data = {
+                'problem_params': problem_params,
+                'converged': results['converged'],
+                'iterations': results['iterations'],
+                'final_objective': results['objectives'][-1],
+                'final_error': results['errors'][-1],
+                'total_time': total_time,
+                'objectives': results['objectives'],
+                'errors': results['errors']
+            }
+            
+            with open('mpi_simulation_summary.json', 'w') as f:
+                json.dump(summary_data, f, indent=2)
+            
+            print(f"\nResults saved to mpi_simulation_results.pkl and mpi_simulation_summary.json")
 
 
 if __name__ == "__main__":
