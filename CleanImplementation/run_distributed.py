@@ -16,7 +16,7 @@ from mpi4py import MPI
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent))
 
-from mps_core import DistributedMPS, MPSConfig
+from mps_core import DistributedMPSFixed, MPSConfig
 
 
 def load_config(config_path: str) -> dict:
@@ -150,11 +150,11 @@ def main():
         print(f"  Max Iterations: {config.max_iterations}")
         print(f"  Tolerance: {config.tolerance}")
     
-    # Create distributed MPS instance
+    # Create distributed MPS instance (using fixed version)
     if rank == 0:
-        print(f"\n[Rank 0] Initializing Distributed MPS algorithm...")
+        print(f"\n[Rank 0] Initializing Distributed MPS algorithm (Fixed)...")
     
-    distributed_mps = DistributedMPS(config, comm)
+    distributed_mps = DistributedMPSFixed(config, comm)
     
     # Synchronize before starting
     comm.Barrier()
