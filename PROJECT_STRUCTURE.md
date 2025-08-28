@@ -1,136 +1,196 @@
-# Project Structure: Decentralized Localization System
+# Project Structure: Decentralized Localization System (Refactored)
 
 ## Overview
 
-This project is organized into three distinct components:
-
-1. **Simulation** - Theoretical performance with ideal hardware
-2. **Emulation** - Real constraints using computer's clock  
-3. **Hardware Ready** - Interface for actual RF hardware
+This project has been reorganized for better maintainability, clearer separation of concerns, and production-readiness. The new structure follows Python best practices with distinct directories for source code, tests, documentation, and configuration.
 
 ## Directory Structure
 
 ```
 CleanImplementation/
 │
-├── simulation/              # Ideal carrier phase synchronization
-│   ├── config/             # YAML configuration files
-│   │   └── phase_sync_sim.yaml
-│   ├── src/                # Simulation source code
-│   │   ├── run_phase_sync_simulation.py
-│   │   ├── simulate_ideal_phase_sync.py
-│   │   └── simulate_nanzer_plus_mps.py
-│   ├── visualizations/     # Generated plots
-│   └── README.md          # Detailed documentation
+├── src/                    # All production source code
+│   ├── simulation/         # Ideal carrier phase synchronization
+│   │   ├── config/        # Simulation configurations
+│   │   ├── src/           # Simulation implementation
+│   │   └── README.md      # Simulation documentation
+│   │
+│   ├── emulation/         # Python timing constraints
+│   │   ├── config/        # Emulation configurations
+│   │   ├── src/           # Emulation implementation
+│   │   └── README.md      # Emulation documentation
+│   │
+│   ├── hardware/          # Hardware interface layer
+│   │   ├── interfaces/    # Hardware abstraction
+│   │   ├── config/        # Hardware configs
+│   │   └── docs/          # Integration guides
+│   │
+│   ├── core/              # Shared core algorithms
+│   │   ├── algorithms/    # MPS, OARS, etc.
+│   │   ├── mps_core/      # MPS implementation
+│   │   ├── graph_theoretic/ # Graph algorithms
+│   │   ├── visualization/ # Plotting utilities
+│   │   └── utils/         # Common utilities
+│   │
+│   └── cli/               # Command-line interface
+│       ├── __init__.py
+│       └── main.py        # CLI entry point
 │
-├── emulation/              # Python timing limitations
-│   ├── config/            # YAML configurations
-│   │   └── time_sync_emulation.yaml
-│   ├── src/               # Time-based implementation
-│   │   ├── test_python_timing_limits.py
-│   │   └── time_sync/     # TWTT, frequency, consensus
-│   ├── results/           # Test results
-│   └── README.md         # Documentation
+├── tests/                 # All test files
+│   ├── test_*.py         # Unit and integration tests
+│   └── conftest.py       # Pytest configuration
 │
-├── hardware_ready/         # Future hardware interface
-│   ├── interfaces/        # Hardware abstraction layer
-│   ├── config/           # Hardware configurations
-│   ├── docs/             # Integration guides
-│   └── README.md        # Hardware requirements
+├── docs/                  # All documentation
+│   ├── *.md              # Analysis reports and docs
+│   └── api/              # API documentation
 │
-├── shared/                # Common components
-│   ├── algorithms/       # Core MPS, OARS, etc.
-│   ├── visualization/    # Unified plotting module
-│   │   └── network_plots.py
-│   └── utils/           # Common utilities
+├── configs/               # All configuration files
+│   ├── *.yaml            # YAML configurations
+│   └── examples/         # Example configs
 │
-└── PROJECT_STRUCTURE.md  # This file
+├── scripts/               # Utility scripts
+│   ├── run_*.py          # Run scripts
+│   ├── simulate_*.py     # Simulation scripts
+│   └── visualize_*.py    # Visualization scripts
+│
+├── experiments/           # Research experiments
+│   └── demo_*.py         # Demo scripts
+│
+├── results/               # Output results
+│   ├── *.png             # Visualizations
+│   └── *.json            # Numerical results
+│
+├── setup.py              # Package installation
+├── pytest.ini            # Testing configuration
+├── requirements.txt      # Dependencies
+├── README.md            # Main documentation
+├── SETUP_GUIDE.md       # Installation guide
+└── PROJECT_STRUCTURE.md # This file
 ```
+
+## Key Improvements
+
+### 1. **Clean Root Directory**
+- Only essential files at root level
+- Clear separation of code, tests, and documentation
+- Easy to navigate and understand
+
+### 2. **Proper Python Package Structure**
+- All source code under `src/`
+- Installable via `pip install -e .`
+- Clear module hierarchy
+
+### 3. **Unified Testing Framework**
+- All tests in dedicated `tests/` directory
+- Configured with pytest
+- Easy to run: `pytest`
+
+### 4. **Command-Line Interface**
+```bash
+# Run simulation
+python -m cli.main simulate
+
+# Test timing limits
+python -m cli.main emulate --test timing
+
+# Run benchmarks
+python -m cli.main benchmark --component all
+
+# Generate visualization
+python -m cli.main visualize results.json --plot-type network
+```
+
+### 5. **Better Documentation**
+- Comprehensive README for each component
+- API documentation
+- Clear separation of analysis reports
 
 ## Component Descriptions
 
-### 1. Simulation (`simulation/`)
+### Core Components (`src/core/`)
+- **algorithms/**: Core localization algorithms (MPS, belief propagation)
+- **mps_core/**: Message Passing Scheme implementation
+- **graph_theoretic/**: Graph-based localization
+- **visualization/**: Unified plotting and visualization tools
+- **utils/**: Shared utilities and helpers
 
-**Purpose**: Demonstrates theoretical performance with ideal carrier phase synchronization
+### Main Applications
 
-**Key Features**:
-- Implements Nanzer paper's carrier phase approach
-- Uses floating-point to simulate picosecond-level precision
-- YAML-based configuration
-- Comprehensive visualization
-- **Expected RMSE: 0.1-0.2mm** (meets S-band requirement)
+#### Simulation (`src/simulation/`)
+- **Purpose**: Theoretical performance with ideal carrier phase
+- **Technology**: Carrier phase @ 2.4 GHz
+- **RMSE**: 0.1-0.2mm
+- **Meets S-band**: ✓
 
-**Run Example**:
+#### Emulation (`src/emulation/`)
+- **Purpose**: Real constraints with Python timing
+- **Technology**: Computer clock
+- **RMSE**: 600-1000mm
+- **Meets S-band**: ✗
+
+#### Hardware (`src/hardware/`)
+- **Purpose**: Interface for real RF hardware
+- **Status**: Ready for integration
+- **Supports**: RF phase, UWB, GPS modules
+
+## Quick Start
+
+### Installation
 ```bash
-cd simulation/src
-python run_phase_sync_simulation.py
+# Install in development mode
+pip install -e .
+
+# Install with development dependencies
+pip install -e ".[dev]"
 ```
 
-### 2. Emulation (`emulation/`)
-
-**Purpose**: Shows real limitations using computer's clock
-
-**Key Features**:
-- Uses `time.perf_counter_ns()` (~41ns resolution)
-- Implements TWTT, frequency sync, consensus
-- Demonstrates why time-based approach fails
-- **Achieved RMSE: 600-1000mm** (doesn't meet requirements)
-
-**Run Example**:
+### Running Tests
 ```bash
-cd emulation/src
-python test_python_timing_limits.py
+# Run all tests
+pytest
+
+# Run specific test
+pytest tests/test_mps.py
+
+# Run with coverage
+pytest --cov=src
 ```
 
-### 3. Hardware Ready (`hardware_ready/`)
+### Using the CLI
+```bash
+# Show help
+python -m cli.main --help
 
-**Purpose**: Interface layer for real RF hardware integration
+# Run simulation
+python -m cli.main simulate
 
-**Key Features**:
-- Hardware abstraction layer (HAL)
-- Support for multiple hardware types:
-  - RF phase measurement modules
-  - UWB rangers
-  - GPS-disciplined oscillators
-- Configuration templates
-- Integration documentation
+# Test timing
+python -m cli.main emulate --test timing
 
-**Future Use**:
+# Benchmark all components
+python -m cli.main benchmark --component all
+```
+
+### Direct Module Usage
 ```python
-from hardware_ready.interfaces import HardwareInterface
+# Import core algorithms
+from src.core.mps_core.algorithm import MPSAlgorithm
+from src.core.visualization.network_plots import NetworkVisualizer
 
-hw = HardwareInterface(type='rf_phase')
-distance = hw.measure_distance(node_i, node_j)
+# Run simulation
+from src.simulation.src.run_phase_sync_simulation import CarrierPhaseSimulation
+sim = CarrierPhaseSimulation("config.yaml")
+sim.run()
 ```
-
-### 4. Shared (`shared/`)
-
-**Purpose**: Common algorithms and utilities
-
-**Key Components**:
-- **algorithms/**: Core MPS, OARS matrices, proximal operators
-- **visualization/**: Unified plotting module with consistent style
-- **utils/**: Common utilities
-
-## Key Results Summary
-
-| Approach | Technology | Ranging Accuracy | Localization RMSE | Meets S-band? |
-|----------|------------|------------------|-------------------|---------------|
-| **Simulation** | Carrier phase @ 2.4 GHz | 0.02mm | 0.1-0.2mm | ✓ |
-| **Emulation** | Python timer | 600mm | 600-1000mm | ✗ |
-| No sync | 5% noise model | 50mm @ 1m | 14,500mm | ✗ |
-| GPS time | Hardware GPS | 30-50mm | 30-50mm | ✗ |
 
 ## Configuration System
 
-All components use YAML configuration files for easy parameter tuning:
-
+All components use YAML configuration:
 ```yaml
-# Example: simulation/config/phase_sync_sim.yaml
+# Example: configs/simulation.yaml
 network:
-  n_sensors: 20
+  n_sensors: 30
   n_anchors: 4
-  scale_meters: 10.0
   
 carrier_phase:
   frequency_ghz: 2.4
@@ -141,44 +201,26 @@ visualization:
   save_plots: true
 ```
 
-## Visualization System
+## Development Workflow
 
-Unified visualization module provides:
-- Network topology plots (true vs estimated positions)
-- Convergence curves (RMSE and objective function)
-- Error distribution histograms
-- Spatial error heatmaps
-- RMSE comparison bar charts
+1. **Make changes** in appropriate `src/` subdirectory
+2. **Write tests** in `tests/`
+3. **Run tests**: `pytest`
+4. **Check style**: `flake8 src tests`
+5. **Format code**: `black src tests`
+6. **Build docs**: `cd docs && make html`
 
-## Quick Start Guide
+## Key Results Summary
 
-1. **See theoretical performance**:
-   ```bash
-   cd simulation/src
-   python run_phase_sync_simulation.py
-   ```
-
-2. **Test Python timing limits**:
-   ```bash
-   cd emulation/src
-   python test_python_timing_limits.py
-   ```
-
-3. **View all documentation**:
-   - `simulation/README.md` - Carrier phase theory
-   - `emulation/README.md` - Timing limitations
-   - `hardware_ready/README.md` - Hardware requirements
-
-## Key Insights
-
-1. **Algorithms are correct** - MPS works with accurate measurements
-2. **Carrier phase is key** - Milliradian phase → millimeter ranging
-3. **Python timing is limiting** - 41ns resolution → 12m uncertainty
-4. **Hardware is required** - Need RF phase measurement for S-band
+| Approach | Technology | Localization RMSE | Meets S-band? |
+|----------|-----------|-------------------|---------------|
+| **Simulation** | Carrier phase @ 2.4 GHz | 0.1-0.2mm | ✓ |
+| **Emulation** | Python timer | 600-1000mm | ✗ |
+| **No sync** | 5% noise model | 14,500mm | ✗ |
 
 ## Next Steps
 
-1. **Hardware Integration**: Implement HAL for real RF modules
-2. **Field Testing**: Deploy with actual S-band hardware
-3. **Optimization**: Port critical paths to C/FPGA
-4. **Scaling**: Test with larger networks (100+ nodes)
+1. **Hardware Integration**: Implement interfaces in `src/hardware/`
+2. **Performance Optimization**: Port critical paths to C/Rust
+3. **Field Testing**: Deploy with actual S-band hardware
+4. **Documentation**: Generate full API documentation

@@ -16,8 +16,9 @@ from datetime import datetime
 
 # Add parent directories to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
-from shared.visualization.network_plots import NetworkVisualizer
+from core.visualization.network_plots import NetworkVisualizer
 
 
 class CarrierPhaseSimulation:
