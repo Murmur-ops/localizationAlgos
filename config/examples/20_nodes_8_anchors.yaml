@@ -1,0 +1,28 @@
+# Configuration for 20 nodes with 8 anchors
+# Optimized for decentralized radar array localization
+
+network:
+  n_sensors: 20          # 20 sensor nodes to localize
+  n_anchors: 8           # 8 anchor nodes (40% anchor coverage)
+  communication_range: 0.35  # Moderate range for good connectivity
+  dimension: 2           # 2D localization
+
+measurements:
+  noise_factor: 0.05     # 5% noise (realistic for radar measurements)
+  seed: 2024             # Fixed seed for reproducibility
+
+algorithm:
+  gamma: 0.98            # Balanced consensus parameter
+  alpha: 1.2             # Moderate step size for stability
+  max_iterations: 400    # Sufficient for convergence
+  tolerance: 0.00005     # Reasonable convergence threshold
+
+mpi:
+  enable: true           # Enable distributed execution
+  n_processes: 4         # 4 processes (5 sensors per process)
+
+output:
+  save_results: true
+  output_dir: "results/20_nodes/"
+  verbose: true
+  save_interval: 40      # Save every 40 iterations
