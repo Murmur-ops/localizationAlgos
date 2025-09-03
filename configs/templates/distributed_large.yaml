@@ -1,0 +1,45 @@
+# Distributed Large Network Configuration
+# For MPI execution on large sensor networks
+# Run with: mpirun -n 8 python scripts/run_distributed.py --config this_file.yaml
+
+network:
+  n_sensors: 200          # Large network
+  n_anchors: 20           # 10% anchors for large network
+  communication_range: 0.15 # Sparser for realism
+  dimension: 2
+  scale: 50.0             # 50m x 50m area
+  min_connectivity: 3     # Ensure connected network
+
+measurements:
+  noise_factor: 0.08      # Higher noise in large deployment
+  seed: null              # Random for real testing
+  outlier_probability: 0.05 # 5% outliers expected
+  outlier_magnitude: 3.0
+
+algorithm:
+  name: "mps"
+  gamma: 0.995            # Very stable for distributed
+  alpha: 0.8              # Conservative step size
+  max_iterations: 1000    
+  tolerance: 0.0001
+  patience: 100
+  adaptive: true          # Auto-tune parameters
+
+mpi:
+  enable: true
+  n_processes: 8          # Adjust based on your cluster
+  consensus_rounds: 10    # More rounds for large network
+  async_updates: true     # Better scaling
+  load_balance: "graph-based"
+
+output:
+  save_results: true
+  output_dir: "results/distributed/"
+  format: "npz"           # Efficient for large data
+  verbose: false          # Minimal output in distributed
+  save_interval: 100      # Save periodically
+  save_history: false     # Too much data for large network
+
+experimental:
+  hierarchical: true      # Essential for large networks
+  cluster_size: 25        # Subdivide into clusters
