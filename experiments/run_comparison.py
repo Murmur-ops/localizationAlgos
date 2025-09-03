@@ -13,8 +13,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 
-from algorithms.mps_proper import ProperMPSAlgorithm
-from algorithms.admm import DecentralizedADMM
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.admm import DecentralizedADMM
 
 
 def run_single_comparison(n_sensors: int = 30,
