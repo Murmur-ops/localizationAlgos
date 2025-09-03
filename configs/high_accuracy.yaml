@@ -1,0 +1,46 @@
+# High Accuracy Configuration
+# Optimized for maximum localization accuracy
+
+network:
+  n_sensors: 40
+  n_anchors: 8
+  scale: 30.0
+  dimension: 2
+  communication_range: 0.5
+  anchor_placement: "optimal"  # Places anchors at corners and center
+
+measurements:
+  measurement_type: "distance"
+  noise_factor: 0.001  # Very low noise
+  outlier_probability: 0.0
+  seed: 42
+
+algorithm:
+  name: "mps"
+  gamma: 0.999  # Very stable convergence
+  alpha: 0.5    # Conservative step size
+  max_iterations: 2000
+  tolerance: 1e-8  # Very tight tolerance
+  
+  # Advanced features
+  use_sdp_init: true  # Semidefinite programming initialization
+  use_anderson_acceleration: true
+  anderson_memory: 10
+  use_adaptive_steps: true
+
+optimization:
+  preconditioning: true
+  warm_start: true
+  multi_scale: true
+  refinement_iterations: 100
+
+output:
+  save_results: true
+  output_dir: "results/high_accuracy/"
+  save_intermediate: true
+  verbose: true
+  
+requirements:
+  max_rmse: 0.01  # 1cm accuracy target
+  max_iterations: 2000
+  convergence_rate: 0.95

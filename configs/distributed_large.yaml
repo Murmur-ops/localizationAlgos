@@ -1,0 +1,40 @@
+# Distributed Large-Scale Configuration
+# For testing MPI-based distributed execution with large networks
+
+network:
+  n_sensors: 100
+  n_anchors: 10
+  scale: 50.0
+  dimension: 2
+  communication_range: 0.25
+  topology: "random"
+
+measurements:
+  measurement_type: "distance"
+  noise_factor: 0.03
+  outlier_probability: 0.05
+  seed: 42
+
+algorithm:
+  name: "distributed_mps"
+  gamma: 0.995
+  alpha: 0.8
+  max_iterations: 1000
+  tolerance: 1e-5
+
+mpi:
+  enable: true
+  async_communication: true
+  buffer_size: 1024
+  collective_operations: true
+
+performance:
+  track_metrics: true
+  log_interval: 50
+  checkpoint_interval: 100
+
+output:
+  save_results: true
+  output_dir: "results/distributed/"
+  save_checkpoints: true
+  verbose: true

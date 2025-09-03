@@ -255,6 +255,18 @@ class MPSAlgorithm:
         Returns:
             Dictionary with results
         """
+        # Ensure Z_matrix is initialized
+        if self.Z_matrix is None:
+            # Build a simple consensus matrix if not already done
+            n = self.config.n_sensors
+            if not hasattr(self, 'adjacency') or self.adjacency is None:
+                # Create fully connected graph if no adjacency specified
+                self.adjacency = np.ones((n, n)) - np.eye(n)
+            self.Z_matrix = MatrixOperations.create_consensus_matrix(
+                self.adjacency, 
+                self.config.gamma
+            )
+        
         # Initialize
         state = self.initialize_state()
         

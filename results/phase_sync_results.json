@@ -1,0 +1,107 @@
+{
+  "timestamp": "2025-09-03T15:59:54.895194",
+  "config": {
+    "simulation": {
+      "name": "Carrier Phase Sync + Decentralized MPS",
+      "description": "Simulates S-band carrier phase synchronization with millimeter-level ranging",
+      "num_trials": 10,
+      "random_seed": 42
+    },
+    "network": {
+      "n_sensors": 20,
+      "n_anchors": 4,
+      "scale_meters": 10.0,
+      "communication_range_factor": 0.5,
+      "anchor_placement": "corners"
+    },
+    "carrier_phase": {
+      "frequency_ghz": 2.4,
+      "phase_noise_milliradians": 1.0,
+      "frequency_stability_ppb": 0.1,
+      "coarse_time_accuracy_ns": 1.0
+    },
+    "mps_algorithm": {
+      "max_iterations": 500,
+      "convergence_tolerance": "1e-5",
+      "use_sdp_init": true,
+      "use_anderson_acceleration": true,
+      "anderson_memory": 5,
+      "use_adaptive_steps": true
+    },
+    "visualization": {
+      "show_plots": true,
+      "save_plots": true,
+      "output_dir": "visualizations/",
+      "figure_format": "png",
+      "dpi": 150,
+      "style": "publication"
+    },
+    "performance_requirements": {
+      "sband_rmse_mm": 15.0
+    },
+    "output": {
+      "save_results": true,
+      "results_file": "results/phase_sync_results.json",
+      "verbose": true
+    }
+  },
+  "summary": {
+    "mean_rmse_mm": 0.13540149573854585,
+    "std_rmse_mm": 0.014554149912593286,
+    "min_rmse_mm": 0.10434359924067946,
+    "max_rmse_mm": 0.15644142259842397,
+    "meets_sband": true
+  },
+  "trials": [
+    {
+      "trial": 0,
+      "rmse_mm": 0.14181533009157937,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 1,
+      "rmse_mm": 0.10434359924067946,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 2,
+      "rmse_mm": 0.15644142259842397,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 3,
+      "rmse_mm": 0.12082721904839137,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 4,
+      "rmse_mm": 0.13410456534565227,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 5,
+      "rmse_mm": 0.13964220108061987,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 6,
+      "rmse_mm": 0.14661567978850665,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 7,
+      "rmse_mm": 0.15024147170768412,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 8,
+      "rmse_mm": 0.13406819518735708,
+      "ranging_error_mm": 0.019880604830153928
+    },
+    {
+      "trial": 9,
+      "rmse_mm": 0.12591527329656438,
+      "ranging_error_mm": 0.019880604830153928
+    }
+  ]
+}

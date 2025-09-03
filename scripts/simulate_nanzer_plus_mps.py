@@ -16,7 +16,10 @@ import matplotlib.pyplot as plt
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
 import time
-from algorithms.mps_advanced import AdvancedMPSAlgorithm
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from src.core.algorithms.mps_advanced import AdvancedMPSAlgorithm
 
 
 @dataclass

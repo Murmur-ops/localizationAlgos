@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "WebFetch(domain:oars.readthedocs.io)",
+      "Bash(git commit:*)",
+      "Bash(./setup.sh:*)",
+      "Bash(source:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(pip install cvxpy)",
+      "Bash(mpirun:*)",
+      "Bash(mv:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(find:*)",
+      "Bash(timeout 5 mpirun -n 2 python snl_mpi_optimized.py)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "Bash(git add:*)",
+      "Read(/private/tmp/decentralized_test/**)",
+      "Read(/private/tmp/decentralized_test/clean_test/**)",
+      "Read(/private/tmp/decentralized_test/fresh_test/**)",
+      "Read(/private/tmp/decentralized_test/fresh_test/**)",
+      "Read(/private/tmp/decentralized_test/fresh_test/configs/examples/**)"
+    ],
+    "deny": []
+  }
+}

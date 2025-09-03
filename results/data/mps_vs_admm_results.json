@@ -1,0 +1,35 @@
+{
+  "single_comparison": {
+    "mps_iterations": 40,
+    "admm_iterations": 500,
+    "mps_final_error": 0.04,
+    "admm_final_error": 0.26588714374835987,
+    "mps_time": 0.16447114944458008,
+    "admm_time": 2.079692840576172,
+    "error_ratio": 6.647178593708997,
+    "mps_better_by": "6.65x",
+    "iteration_ratio": 12.5
+  },
+  "statistical_analysis": {
+    "mps_mean_error": 0.04,
+    "mps_std_error": 0.0,
+    "admm_mean_error": 0.2736040534512794,
+    "admm_std_error": 0.00665926346439349,
+    "mps_mean_iters": 40.0,
+    "admm_mean_iters": 500.0,
+    "error_ratio_mean": 6.840101336281985,
+    "paper_claim_validated": "True"
+  },
+  "problem_params": {
+    "n_sensors": 30,
+    "n_anchors": 6,
+    "d": 2,
+    "communication_range": 0.7,
+    "noise_factor": 0.05,
+    "gamma": 0.999,
+    "alpha_mps": 10.0,
+    "alpha_admm": 150.0,
+    "max_iter": 500,
+    "tol": 0.0001
+  }
+}
