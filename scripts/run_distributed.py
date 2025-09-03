@@ -14,9 +14,10 @@ from pathlib import Path
 from mpi4py import MPI
 
 # Add parent directory to path
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
-from mps_core import DistributedMPSFixed, MPSConfig
+from src.core.mps_core.distributed_fixed import DistributedMPSFixed
+from src.core.mps_core.algorithm import MPSConfig
 
 
 def load_config(config_path: str) -> dict:

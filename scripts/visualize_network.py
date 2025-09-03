@@ -12,9 +12,9 @@ import yaml
 
 # Add parent directory to path
 import sys
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
-from mps_core import MPSAlgorithm, MPSConfig
+from src.core.mps_core.algorithm import MPSAlgorithm, MPSConfig
 
 
 def load_config(config_path: str) -> dict:

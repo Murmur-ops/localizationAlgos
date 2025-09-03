@@ -10,9 +10,9 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent))
 
-from mps_core import MPSAlgorithm, MPSConfig
+from src.core.mps_core.algorithm import MPSAlgorithm, MPSConfig
 
 
 def visualize_estimated_vs_actual():
