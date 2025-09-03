@@ -6,4 +6,4 @@ and Message Passing Scheme (MPS) algorithms.
 """
 
 __version__ = "1.0.0"
-__author__ = "DecentralizedLocale Team"
+__author__ = "Max Burnett"

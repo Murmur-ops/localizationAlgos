@@ -13,7 +13,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="decentralized-localization",
     version="1.0.0",
-    author="DecentralizedLocale Team",
+    author="Max Burnett",
     description="Decentralized localization system with carrier phase synchronization",
     long_description=long_description,
     long_description_content_type="text/markdown",
