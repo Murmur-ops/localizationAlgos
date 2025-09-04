@@ -38,7 +38,7 @@ def dict_to_config(config_dict: dict) -> MPSConfig:
         gamma=config_dict['algorithm']['gamma'],
         alpha=config_dict['algorithm']['alpha'],
         max_iterations=config_dict['algorithm']['max_iterations'],
-        tolerance=config_dict['algorithm']['tolerance']
+        tolerance=float(config_dict['algorithm']['tolerance'])  # Ensure float conversion
     )
 
 
