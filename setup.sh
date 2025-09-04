@@ -8,7 +8,8 @@ echo "========================================"
 # Check Python version
 echo -n "Checking Python version... "
 python_version=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-if [[ $(echo "$python_version >= 3.8" | bc) -eq 1 ]]; then
+# Use awk for version comparison (more portable than bc)
+if python3 -c "import sys; exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev/null; then
     echo "OK (Python $python_version)"
 else
     echo "ERROR: Python 3.8+ required (found $python_version)"
