@@ -84,6 +84,64 @@ def save_results_distributed(results: dict, config: dict, output_dir: str, rank:
     return filepath
 
 
+def visualize_distributed_results(results: dict, config: dict, output_dir: str):
+    """Generate visualization for distributed results"""
+    try:
+        import matplotlib.pyplot as plt
+        
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # Plot 1: Convergence
+        ax = axes[0]
+        if 'objective_history' in results and len(results['objective_history']) > 0:
+            iterations = range(0, len(results['objective_history'])*10, 10)
+            ax.semilogy(iterations, results['objective_history'], 'b-', linewidth=2)
+            ax.set_title('Distributed MPS Convergence')
+            ax.set_xlabel('Iteration')
+            ax.set_ylabel('Objective Value (log scale)')
+            ax.grid(True, alpha=0.3)
+            
+            # Add convergence marker
+            if results.get('converged', False):
+                ax.axvline(x=results['iterations'], color='green', linestyle='--', 
+                          alpha=0.5, label=f"Converged @ {results['iterations']}")
+                ax.legend()
+        
+        # Plot 2: Network positions
+        ax = axes[1]
+        if 'final_positions' in results:
+            positions = results['final_positions']
+            n_sensors = config['network']['n_sensors']
+            
+            for sensor_id, pos in positions.items():
+                sensor_id = int(sensor_id)
+                if sensor_id < n_sensors:
+                    ax.scatter(pos[0], pos[1], c='blue', s=100, alpha=0.7)
+                else:
+                    ax.scatter(pos[0], pos[1], c='red', s=200, marker='s')
+                ax.text(pos[0]+0.02, pos[1]+0.02, str(sensor_id), fontsize=8)
+            
+            ax.set_title('Final Network Configuration')
+            ax.set_xlabel('X Position')
+            ax.set_ylabel('Y Position')
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal')
+        
+        plt.suptitle(f'Distributed MPS Results ({config["network"]["n_sensors"]} sensors, MPI processes: {MPI.COMM_WORLD.size})', 
+                    fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        
+        # Save figure
+        import os
+        os.makedirs(output_dir, exist_ok=True)
+        fig_path = os.path.join(output_dir, 'distributed_results.png')
+        plt.savefig(fig_path, dpi=150)
+        print(f"[Rank 0] Visualization saved to: {fig_path}")
+        plt.show()
+        
+    except ImportError:
+        print("[Rank 0] Matplotlib not available for visualization")
+
 def print_results_distributed(results: dict, rank: int, size: int, elapsed_time: float):
     """Print results from rank 0"""
     if rank != 0 or results is None:
@@ -127,6 +185,8 @@ def main():
                        help='Do not save results to file')
     parser.add_argument('--quiet', action='store_true',
                        help='Minimal output')
+    parser.add_argument('--visualize', action='store_true',
+                       help='Generate visualization plots (rank 0 only)')
     
     args = parser.parse_args()
     
@@ -179,6 +239,11 @@ def main():
     if not args.no_save and config_dict['output']['save_results']:
         save_results_distributed(results, config_dict, 
                                 config_dict['output']['output_dir'], rank)
+    
+    # Generate visualization if requested (rank 0 only)
+    if args.visualize and rank == 0 and results is not None:
+        visualize_distributed_results(results, config_dict, 
+                                     config_dict['output']['output_dir'])
     
     # Finalize MPI
     if rank == 0:
