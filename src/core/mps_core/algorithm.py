@@ -12,6 +12,28 @@ from .proximal import ProximalOperators
 from .matrix_ops import MatrixOperations
 
 
+@dataclass  
+class CarrierPhaseConfig:
+    """Configuration for carrier phase synchronization (Nanzer approach)"""
+    enable: bool = False
+    frequency_ghz: float = 2.4  # S-band frequency
+    phase_noise_milliradians: float = 1.0  # Achievable with RF hardware
+    frequency_stability_ppb: float = 0.1  # OCXO stability
+    coarse_time_accuracy_ns: float = 1.0  # For ambiguity resolution
+    
+    @property
+    def wavelength(self) -> float:
+        """Calculate wavelength in meters"""
+        c = 299792458  # Speed of light m/s
+        return c / (self.frequency_ghz * 1e9)
+    
+    @property
+    def ranging_accuracy_m(self) -> float:
+        """Expected ranging accuracy in meters"""
+        phase_noise_rad = self.phase_noise_milliradians / 1000
+        return (phase_noise_rad / (2 * np.pi)) * self.wavelength
+
+
 @dataclass
 class MPSConfig:
     """Configuration for MPS algorithm"""
@@ -25,6 +47,7 @@ class MPSConfig:
     tolerance: float = 1e-5
     dimension: int = 2
     seed: Optional[int] = 42
+    carrier_phase: Optional[CarrierPhaseConfig] = None
     
 
 @dataclass
@@ -108,22 +131,71 @@ class MPSAlgorithm:
         )
     
     def _generate_measurements(self):
-        """Generate noisy distance measurements"""
+        """Generate noisy distance measurements (with optional carrier phase)"""
         n = self.config.n_sensors
         noise = self.config.noise_factor
         
-        # Sensor-to-sensor measurements
+        # Use carrier phase ranging if enabled
+        if self.config.carrier_phase and self.config.carrier_phase.enable:
+            self._generate_carrier_phase_measurements()
+        else:
+            # Standard noisy distance measurements
+            for i in range(n):
+                for j in range(i+1, n):
+                    if self.adjacency[i, j] > 0:
+                        true_dist = np.linalg.norm(
+                            self.true_positions[i] - self.true_positions[j]
+                        )
+                        noisy_dist = true_dist * (1 + noise * np.random.randn())
+                        self.distance_measurements[(i, j)] = max(0.01, noisy_dist)
+                        self.distance_measurements[(j, i)] = self.distance_measurements[(i, j)]
+            
+            # Sensor-to-anchor measurements
+            if self.config.n_anchors > 0:
+                for i in range(n):
+                    self.anchor_distances[i] = {}
+                    for k in range(self.config.n_anchors):
+                        true_dist = np.linalg.norm(
+                            self.true_positions[i] - self.anchor_positions[k]
+                        )
+                        if true_dist <= self.config.communication_range:
+                            noisy_dist = true_dist * (1 + noise * np.random.randn())
+                            self.anchor_distances[i][k] = max(0.01, noisy_dist)
+    
+    def _generate_carrier_phase_measurements(self):
+        """Generate carrier phase-based distance measurements (Nanzer approach)"""
+        n = self.config.n_sensors
+        cp_config = self.config.carrier_phase
+        
+        # Physical parameters
+        wavelength = cp_config.wavelength
+        phase_noise_rad = cp_config.phase_noise_milliradians / 1000
+        coarse_accuracy_m = cp_config.coarse_time_accuracy_ns * 1e-9 * 299792458 / 2
+        
+        # Sensor-to-sensor measurements with carrier phase
         for i in range(n):
             for j in range(i+1, n):
                 if self.adjacency[i, j] > 0:
                     true_dist = np.linalg.norm(
                         self.true_positions[i] - self.true_positions[j]
                     )
-                    noisy_dist = true_dist * (1 + noise * np.random.randn())
-                    self.distance_measurements[(i, j)] = max(0.01, noisy_dist)
+                    
+                    # Carrier phase measurement (fine but ambiguous)
+                    true_phase = (2 * np.pi * true_dist) / wavelength
+                    measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
+                    wrapped_phase = np.angle(np.exp(1j * measured_phase))
+                    
+                    # Coarse distance for ambiguity resolution
+                    coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
+                    n_wavelengths = np.round(coarse_dist / wavelength)
+                    
+                    # Combined measurement (millimeter accuracy)
+                    measured_dist = n_wavelengths * wavelength + (wrapped_phase * wavelength) / (2 * np.pi)
+                    
+                    self.distance_measurements[(i, j)] = max(0.001, measured_dist)
                     self.distance_measurements[(j, i)] = self.distance_measurements[(i, j)]
         
-        # Sensor-to-anchor measurements
+        # Sensor-to-anchor measurements with carrier phase
         if self.config.n_anchors > 0:
             for i in range(n):
                 self.anchor_distances[i] = {}
@@ -132,8 +204,16 @@ class MPSAlgorithm:
                         self.true_positions[i] - self.anchor_positions[k]
                     )
                     if true_dist <= self.config.communication_range:
-                        noisy_dist = true_dist * (1 + noise * np.random.randn())
-                        self.anchor_distances[i][k] = max(0.01, noisy_dist)
+                        # Same carrier phase approach for anchors
+                        true_phase = (2 * np.pi * true_dist) / wavelength
+                        measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
+                        wrapped_phase = np.angle(np.exp(1j * measured_phase))
+                        
+                        coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
+                        n_wavelengths = np.round(coarse_dist / wavelength)
+                        
+                        measured_dist = n_wavelengths * wavelength + (wrapped_phase * wavelength) / (2 * np.pi)
+                        self.anchor_distances[i][k] = max(0.001, measured_dist)
     
     def initialize_state(self) -> MPSState:
         """Initialize algorithm state"""

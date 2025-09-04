@@ -25,19 +25,34 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def dict_to_config(config_dict: dict) -> MPSConfig:
+def dict_to_config(config_dict: dict, enable_carrier_phase: bool = False) -> MPSConfig:
     """Convert configuration dictionary to MPSConfig object"""
+    from src.core.mps_core.algorithm import CarrierPhaseConfig
+    
+    # Create carrier phase config if present in YAML or enabled via command line
+    carrier_phase_config = None
+    if enable_carrier_phase or 'carrier_phase' in config_dict:
+        cp_dict = config_dict.get('carrier_phase', {})
+        carrier_phase_config = CarrierPhaseConfig(
+            enable=True,
+            frequency_ghz=cp_dict.get('frequency_ghz', 2.4),
+            phase_noise_milliradians=cp_dict.get('phase_noise_milliradians', 1.0),
+            frequency_stability_ppb=cp_dict.get('frequency_stability_ppb', 0.1),
+            coarse_time_accuracy_ns=cp_dict.get('coarse_time_accuracy_ns', 1.0)
+        )
+    
     return MPSConfig(
         n_sensors=config_dict['network']['n_sensors'],
         n_anchors=config_dict['network']['n_anchors'],
-        communication_range=config_dict['network']['communication_range'],
-        dimension=config_dict['network']['dimension'],
-        noise_factor=config_dict['measurements']['noise_factor'],
-        seed=config_dict['measurements'].get('seed', None),
+        communication_range=config_dict['network'].get('communication_range', 0.3),
+        dimension=config_dict['network'].get('dimension', 2),
+        noise_factor=config_dict.get('measurements', {}).get('noise_factor', 0.001 if carrier_phase_config else 0.05),
+        seed=config_dict.get('measurements', {}).get('seed', 42),
         gamma=config_dict['algorithm']['gamma'],
         alpha=config_dict['algorithm']['alpha'],
         max_iterations=config_dict['algorithm']['max_iterations'],
-        tolerance=float(config_dict['algorithm']['tolerance'])
+        tolerance=float(config_dict['algorithm']['tolerance']),
+        carrier_phase=carrier_phase_config
     )
 
 
@@ -142,13 +157,15 @@ def main():
                        help='Visualize final positions')
     parser.add_argument('--quiet', action='store_true',
                        help='Minimal output')
+    parser.add_argument('--carrier-phase', action='store_true',
+                       help='Enable carrier phase synchronization (Nanzer approach for mm-level accuracy)')
     
     args = parser.parse_args()
     
     # Load configuration
     print(f"Loading configuration from: {args.config}")
     config_dict = load_config(args.config)
-    config = dict_to_config(config_dict)
+    config = dict_to_config(config_dict, enable_carrier_phase=args.carrier_phase)
     
     # Print configuration summary
     if not args.quiet:

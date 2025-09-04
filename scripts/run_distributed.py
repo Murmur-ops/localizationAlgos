@@ -26,19 +26,34 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def dict_to_config(config_dict: dict) -> MPSConfig:
+def dict_to_config(config_dict: dict, enable_carrier_phase: bool = False) -> MPSConfig:
     """Convert configuration dictionary to MPSConfig object"""
+    from src.core.mps_core.algorithm import CarrierPhaseConfig
+    
+    # Create carrier phase config if present in YAML or enabled via command line
+    carrier_phase_config = None
+    if enable_carrier_phase or 'carrier_phase' in config_dict:
+        cp_dict = config_dict.get('carrier_phase', {})
+        carrier_phase_config = CarrierPhaseConfig(
+            enable=True,
+            frequency_ghz=cp_dict.get('frequency_ghz', 2.4),
+            phase_noise_milliradians=cp_dict.get('phase_noise_milliradians', 1.0),
+            frequency_stability_ppb=cp_dict.get('frequency_stability_ppb', 0.1),
+            coarse_time_accuracy_ns=cp_dict.get('coarse_time_accuracy_ns', 1.0)
+        )
+    
     return MPSConfig(
         n_sensors=config_dict['network']['n_sensors'],
         n_anchors=config_dict['network']['n_anchors'],
-        communication_range=config_dict['network']['communication_range'],
-        dimension=config_dict['network']['dimension'],
-        noise_factor=config_dict['measurements']['noise_factor'],
-        seed=config_dict['measurements'].get('seed', None),
+        communication_range=config_dict['network'].get('communication_range', 0.3),
+        dimension=config_dict['network'].get('dimension', 2),
+        noise_factor=config_dict.get('measurements', {}).get('noise_factor', 0.001 if carrier_phase_config else 0.05),
+        seed=config_dict.get('measurements', {}).get('seed', 42),
         gamma=config_dict['algorithm']['gamma'],
         alpha=config_dict['algorithm']['alpha'],
         max_iterations=config_dict['algorithm']['max_iterations'],
-        tolerance=float(config_dict['algorithm']['tolerance'])  # Ensure float conversion
+        tolerance=float(config_dict['algorithm']['tolerance']),  # Ensure float conversion
+        carrier_phase=carrier_phase_config
     )
 
 
@@ -187,6 +202,8 @@ def main():
                        help='Minimal output')
     parser.add_argument('--visualize', action='store_true',
                        help='Generate visualization plots (rank 0 only)')
+    parser.add_argument('--carrier-phase', action='store_true',
+                       help='Enable carrier phase synchronization (Nanzer approach for mm-level accuracy)')
     
     args = parser.parse_args()
     
@@ -196,7 +213,7 @@ def main():
         print(f"[Rank 0] Running with {size} MPI processes")
     
     config_dict = load_config(args.config)
-    config = dict_to_config(config_dict)
+    config = dict_to_config(config_dict, enable_carrier_phase=args.carrier_phase)
     
     # Print configuration summary (rank 0 only)
     if rank == 0 and not args.quiet:
@@ -205,6 +222,14 @@ def main():
         print(f"  Anchors: {config.n_anchors}")
         print(f"  Communication Range: {config.communication_range}")
         print(f"  Noise Factor: {config.noise_factor}")
+        
+        if config.carrier_phase and config.carrier_phase.enable:
+            print(f"\n[Rank 0] Carrier Phase Synchronization (Nanzer):")
+            print(f"  Frequency: {config.carrier_phase.frequency_ghz} GHz")
+            print(f"  Wavelength: {config.carrier_phase.wavelength*100:.1f} cm")
+            print(f"  Phase noise: {config.carrier_phase.phase_noise_milliradians} mrad")
+            print(f"  Expected ranging accuracy: {config.carrier_phase.ranging_accuracy_m*1000:.3f} mm")
+        
         print(f"\n[Rank 0] Algorithm Parameters:")
         print(f"  Gamma: {config.gamma}")
         print(f"  Alpha: {config.alpha}")
