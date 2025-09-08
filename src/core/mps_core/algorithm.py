@@ -39,7 +39,8 @@ class MPSConfig:
     """Configuration for MPS algorithm"""
     n_sensors: int = 30
     n_anchors: int = 6
-    communication_range: float = 0.3
+    scale: float = 50.0  # Network scale in meters
+    communication_range: float = 0.3  # As fraction of scale
     noise_factor: float = 0.05
     gamma: float = 0.99
     alpha: float = 1.0
@@ -93,32 +94,35 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         d = self.config.dimension
         
-        # Generate random true positions
+        # Generate random true positions scaled to network size
         self.true_positions = {}
+        scale = self.config.scale
         for i in range(n):
-            self.true_positions[i] = np.random.uniform(0, 1, d)
+            self.true_positions[i] = np.random.uniform(0, scale, d)
         
         # Generate anchor positions (well-distributed)
         if self.config.n_anchors > 0:
             if d == 2 and self.config.n_anchors >= 4:
-                # Place anchors at corners for 2D
+                # Place anchors at corners for 2D (scaled to network size)
                 self.anchor_positions = np.array([
-                    [0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]
+                    [0.1*scale, 0.1*scale], [0.9*scale, 0.1*scale], 
+                    [0.9*scale, 0.9*scale], [0.1*scale, 0.9*scale]
                 ])
                 # Add more anchors if needed
                 for i in range(4, self.config.n_anchors):
                     self.anchor_positions = np.vstack([
                         self.anchor_positions,
-                        np.random.uniform(0.2, 0.8, d)
+                        np.random.uniform(0.2*scale, 0.8*scale, d)
                     ])
                 self.anchor_positions = self.anchor_positions[:self.config.n_anchors]
             else:
-                self.anchor_positions = np.random.uniform(0, 1, (self.config.n_anchors, d))
+                self.anchor_positions = np.random.uniform(0, scale, (self.config.n_anchors, d))
         
-        # Build adjacency matrix
+        # Build adjacency matrix (scale communication range)
+        comm_range = self.config.communication_range * scale
         self.adjacency = MatrixOperations.build_adjacency(
             self.true_positions, 
-            self.config.communication_range
+            comm_range
         )
         
         # Generate noisy distance measurements
@@ -158,7 +162,7 @@ class MPSAlgorithm:
                         true_dist = np.linalg.norm(
                             self.true_positions[i] - self.anchor_positions[k]
                         )
-                        if true_dist <= self.config.communication_range:
+                        if true_dist <= self.config.communication_range * self.config.scale:
                             noisy_dist = true_dist * (1 + noise * np.random.randn())
                             self.anchor_distances[i][k] = max(0.01, noisy_dist)
     
@@ -219,6 +223,7 @@ class MPSAlgorithm:
         """Initialize algorithm state"""
         n = self.config.n_sensors
         d = self.config.dimension
+        scale = self.config.scale
         
         # Initialize positions
         positions = {}
@@ -227,10 +232,10 @@ class MPSAlgorithm:
                 # Initialize near anchors if available
                 anchor_ids = list(self.anchor_distances[i].keys())
                 positions[i] = np.mean(self.anchor_positions[anchor_ids], axis=0)
-                positions[i] += 0.1 * np.random.randn(d)  # Small perturbation
+                positions[i] += 0.1 * scale * np.random.randn(d)  # Small perturbation scaled
             else:
-                # Random initialization
-                positions[i] = np.random.uniform(0, 1, d)
+                # Random initialization scaled to network size
+                positions[i] = np.random.uniform(0, scale, d)
         
         # Initialize algorithm variables (2-block structure)
         X = np.zeros((2*n, d))
@@ -287,8 +292,10 @@ class MPSAlgorithm:
             X_new[i] = position
             X_new[i + n] = position
             
-            # Box constraint to keep positions bounded
-            X_new[i] = ProximalOperators.prox_box_constraint(X_new[i], -0.5, 1.5)
+            # Box constraint to keep positions bounded (scaled)
+            X_new[i] = ProximalOperators.prox_box_constraint(
+                X_new[i], -0.1 * self.config.scale, 1.1 * self.config.scale
+            )
             X_new[i + n] = X_new[i]
         
         return X_new
@@ -405,5 +412,8 @@ class MPSAlgorithm:
             'objective_history': objective_history,
             'rmse_history': rmse_history,
             'final_positions': dict(state.positions),
+            'estimated_positions': dict(state.positions),
+            'true_positions': dict(self.true_positions) if self.true_positions else {},
+            'anchor_positions': self.anchor_positions.tolist() if self.anchor_positions is not None else [],
             'config': self.config
         }

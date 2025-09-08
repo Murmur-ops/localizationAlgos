@@ -44,6 +44,7 @@ def dict_to_config(config_dict: dict, enable_carrier_phase: bool = False) -> MPS
     return MPSConfig(
         n_sensors=config_dict['network']['n_sensors'],
         n_anchors=config_dict['network']['n_anchors'],
+        scale=config_dict['network'].get('scale', 50.0),
         communication_range=config_dict['network'].get('communication_range', 0.3),
         dimension=config_dict['network'].get('dimension', 2),
         noise_factor=config_dict.get('measurements', {}).get('noise_factor', 0.001 if carrier_phase_config else 0.05),
@@ -82,8 +83,21 @@ def save_results(results: dict, config: dict, output_dir: str):
     # Convert numpy arrays to lists for JSON serialization
     if 'final_positions' in results:
         output['results']['final_positions'] = {
-            str(k): v.tolist() for k, v in results['final_positions'].items()
+            str(k): v.tolist() if hasattr(v, 'tolist') else v 
+            for k, v in results['final_positions'].items()
         }
+    if 'true_positions' in results:
+        output['results']['true_positions'] = {
+            str(k): v.tolist() if hasattr(v, 'tolist') else v 
+            for k, v in results['true_positions'].items()
+        }
+    if 'estimated_positions' in results:
+        output['results']['estimated_positions'] = {
+            str(k): v.tolist() if hasattr(v, 'tolist') else v 
+            for k, v in results['estimated_positions'].items()
+        }
+    if 'anchor_positions' in results:
+        output['results']['anchor_positions'] = results['anchor_positions']
     
     with open(filepath, 'w') as f:
         json.dump(output, f, indent=2)

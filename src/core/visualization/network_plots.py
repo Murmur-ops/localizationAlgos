@@ -118,11 +118,13 @@ class NetworkVisualizer:
                                         results.get('final_positions', {}))
         anchor_positions = results.get('anchor_positions', {})
         
-        # Convert anchor positions to array if it's a dict
+        # Convert anchor positions to array if it's a dict or list
         if isinstance(anchor_positions, dict):
             anchor_array = np.array(list(anchor_positions.values())) if anchor_positions else np.array([])
+        elif isinstance(anchor_positions, list):
+            anchor_array = np.array(anchor_positions) if anchor_positions else np.array([])
         else:
-            anchor_array = anchor_positions if len(anchor_positions) > 0 else np.array([])
+            anchor_array = anchor_positions if anchor_positions is not None and len(anchor_positions) > 0 else np.array([])
         
         # Get network scale
         network_scale = results.get('network_scale', 50.0)
@@ -209,7 +211,9 @@ class NetworkVisualizer:
         errors = []
         for idx in true_pos:
             if idx in est_pos:
-                error = np.linalg.norm(true_pos[idx] - est_pos[idx])
+                true = np.array(true_pos[idx]) if not isinstance(true_pos[idx], np.ndarray) else true_pos[idx]
+                est = np.array(est_pos[idx]) if not isinstance(est_pos[idx], np.ndarray) else est_pos[idx]
+                error = np.linalg.norm(true - est)
                 errors.append(error)
         
         if errors:
@@ -246,7 +250,9 @@ class NetworkVisualizer:
         Z = np.zeros_like(X)
         
         # Interpolate errors onto grid
-        pos_array = np.array(list(positions.values()))
+        pos_list = [np.array(p) if not isinstance(p, np.ndarray) else p 
+                    for p in positions.values()]
+        pos_array = np.array(pos_list)
         for i in range(grid_size):
             for j in range(grid_size):
                 point = np.array([X[i, j], Y[i, j]])
