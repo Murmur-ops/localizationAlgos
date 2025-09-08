@@ -1,28 +1,77 @@
-# Configuration for small network testing
-# Good for quick tests and algorithm validation
+# Small Network Configuration
+# ============================
+# Purpose: Quick testing and algorithm validation
+# Expected runtime: < 1 second
+# Expected RMSE: 0.1-0.3 units (meters by default)
 
 network:
-  n_sensors: 10          # Small network for testing
-  n_anchors: 4           # Minimum anchors for 2D localization
-  communication_range: 0.5  # Larger range for better connectivity
+  # Number of sensors to localize (unknown positions)
+  n_sensors: 10
+  
+  # Number of anchor nodes (known positions)
+  # Minimum 3 for 2D, 4 for 3D localization
+  n_anchors: 4
+  
+  # Communication range as fraction of network scale
+  # 0.5 = sensors can communicate if distance < 0.5 * scale
+  # Higher values create denser connectivity
+  communication_range: 0.5
+  
+  # Spatial dimension (2 for 2D, 3 for 3D localization)
   dimension: 2
+  
+  # Network scale in meters (default: 10m x 10m area)
+  # Not specified here, so uses default of 10.0
+  # scale: 10.0
 
 measurements:
-  noise_factor: 0.02     # Low noise for validation
+  # Noise factor for distance measurements
+  # 0.02 = 2% multiplicative noise
+  # Distance_measured = Distance_true * (1 + noise_factor * random)
+  noise_factor: 0.02
+  
+  # Random seed for reproducibility
+  # Set to null for random initialization
   seed: 123
+  
+  # Measurement type (distance, rssi, toa)
+  # Not specified, defaults to 'distance'
+  # measurement_type: "distance"
 
 algorithm:
-  gamma: 0.95            # Slightly lower gamma for faster convergence
-  alpha: 1.5             # Larger step size
-  max_iterations: 200    # Fewer iterations needed
-  tolerance: 0.0001      # Convergence tolerance
+  # Proximal gradient parameter (0 < gamma < 1)
+  # Controls step size: smaller = more stable, larger = faster
+  # Typical range: 0.9-0.999
+  gamma: 0.95
+  
+  # Over-relaxation parameter
+  # 1.0 = standard, >1 = accelerated, <1 = under-relaxed
+  # Typical range: 1.0-2.0
+  alpha: 1.5
+  
+  # Maximum iterations before stopping
+  max_iterations: 200
+  
+  # Convergence tolerance (stops when change < tolerance)
+  # Units: same as position coordinates (meters)
+  tolerance: 0.0001
 
 mpi:
+  # Enable MPI distributed execution
   enable: false
+  
+  # Number of MPI processes (ignored if enable=false)
   n_processes: 2
 
 output:
+  # Save results to JSON file
   save_results: true
+  
+  # Directory for output files
   output_dir: "results/small/"
+  
+  # Print progress during execution
   verbose: true
+  
+  # Save intermediate results every N iterations
   save_interval: 20
