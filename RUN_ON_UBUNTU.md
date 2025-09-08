@@ -2,13 +2,13 @@
 
 ## Quick Setup
 
-1. **Clone the repository:**
+1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd DecentralizedLocale
 ```
 
-2. **Install system dependencies:**
+2. Install system dependencies:
 ```bash
 # Update package list
 sudo apt-get update
@@ -23,7 +23,7 @@ sudo apt-get install mpich libmpich-dev
 sudo apt-get install build-essential
 ```
 
-3. **Run the setup script:**
+3. Run the setup script:
 ```bash
 chmod +x setup.sh
 ./setup.sh
@@ -40,7 +40,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. **Test installation:**
+4. Test installation:
 ```bash
 python3 test_installation.py
 ```
@@ -76,11 +76,11 @@ mpirun -n 4 python3 scripts/run_distributed.py --config configs/distributed_larg
 
 ### 1. MPI Execution Error
 If you get "mpirun was unable to launch the specified application":
-- **Solution:** Use `python3` explicitly: `mpirun -n 2 python3 script.py`
+- Solution: Use `python3` explicitly: `mpirun -n 2 python3 script.py`
 
 ### 2. Import Errors
 If modules can't be found:
-- **Solution:** Ensure you're in the project root directory
+- Solution: Ensure you're in the project root directory
 - Activate the virtual environment: `source venv/bin/activate`
 
 ### 3. Permission Denied
@@ -124,7 +124,7 @@ pip install --no-cache-dir mpi4py
 
 ### S-Band Precision
 - Time: ~5 seconds for 10 trials
-- RMSE: **0.14 ± 0.01 mm** (meets S-band requirement of <15mm)
+- RMSE: 0.14 ± 0.01 mm (meets S-band requirement of <15mm)
 - Success Rate: 100%
 
 ### Distributed Large Scale

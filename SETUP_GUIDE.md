@@ -30,9 +30,9 @@ Meets S-band requirement (<15.0 mm): YES ✓
 
 ### Prerequisites
 
-- **Python**: 3.8 or higher
-- **pip**: Latest version
-- **Optional**: MPI implementation (for distributed algorithms)
+- Python: 3.8 or higher
+- pip: Latest version
+- Optional: MPI implementation (for distributed algorithms)
   - macOS: `brew install mpich`
   - Ubuntu: `sudo apt-get install mpich`
   - Windows: Use Microsoft MPI
@@ -58,14 +58,14 @@ python -c "from mpi4py import MPI; print('MPI support: OK')"
 
 #### 4. Test Components
 
-**Test Simulation (Ideal Hardware)**:
+Test Simulation (Ideal Hardware):
 ```bash
 cd simulation/src
 python run_phase_sync_simulation.py
 # Expected: RMSE ~0.14mm
 ```
 
-**Test Emulation (Python Timing)**:
+Test Emulation (Python Timing):
 ```bash
 cd emulation/src
 python test_python_timing_limits.py
@@ -169,29 +169,29 @@ synchronization:
 ## Expected Performance
 
 ### Simulation (Ideal Hardware)
-- **Technology**: Carrier phase @ 2.4 GHz
-- **Ranging Accuracy**: 0.02mm
-- **Localization RMSE**: 0.1-0.2mm
-- **Meets S-band**: ✓
+- Technology: Carrier phase @ 2.4 GHz
+- Ranging Accuracy: 0.02mm
+- Localization RMSE: 0.1-0.2mm
+- Meets S-band: ✓
 
 ### Emulation (Python Timing)
-- **Technology**: Computer clock
-- **Timer Resolution**: ~41ns
-- **Distance Uncertainty**: ~12m
-- **Localization RMSE**: 600-1000mm
-- **Meets S-band**: ✗
+- Technology: Computer clock
+- Timer Resolution: ~41ns
+- Distance Uncertainty: ~12m
+- Localization RMSE: 600-1000mm
+- Meets S-band: ✗
 
 ## System Requirements
 
 ### Minimum
-- **OS**: Windows 10, macOS 10.14, Ubuntu 18.04
-- **Python**: 3.8+
-- **RAM**: 4GB
-- **Disk**: 500MB
+- OS: Windows 10, macOS 10.14, Ubuntu 18.04
+- Python: 3.8+
+- RAM: 4GB
+- Disk: 500MB
 
 ### Recommended
-- **OS**: macOS 12+, Ubuntu 20.04+
-- **Python**: 3.10+
+- OS: macOS 12+, Ubuntu 20.04+
+- Python: 3.10+
 - **RAM**: 8GB+
 - **CPU**: Multi-core for MPI
 - **Disk**: 1GB (for results/visualizations)

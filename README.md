@@ -196,5 +196,5 @@ For questions about real vs. simulated performance, please open an issue.
 
 ---
 
-**Remember**: Real-world performance is usually lower than theoretical claims.
+Remember: Real-world performance is usually lower than theoretical claims.
 This implementation prioritizes honesty over impressive numbers.

@@ -70,22 +70,22 @@ CleanImplementation/
 
 ## Key Improvements
 
-### 1. **Clean Root Directory**
+### 1. Clean Root Directory
 - Only essential files at root level
 - Clear separation of code, tests, and documentation
 - Easy to navigate and understand
 
-### 2. **Proper Python Package Structure**
+### 2. Proper Python Package Structure
 - All source code under `src/`
 - Installable via `pip install -e .`
 - Clear module hierarchy
 
-### 3. **Unified Testing Framework**
+### 3. Unified Testing Framework
 - All tests in dedicated `tests/` directory
 - Configured with pytest
 - Easy to run: `pytest`
 
-### 4. **Command-Line Interface**
+### 4. Command-Line Interface
 ```bash
 # Run simulation
 python -m cli.main simulate
@@ -100,7 +100,7 @@ python -m cli.main benchmark --component all
 python -m cli.main visualize results.json --plot-type network
 ```
 
-### 5. **Better Documentation**
+### 5. Better Documentation
 - Comprehensive README for each component
 - API documentation
 - Clear separation of analysis reports
@@ -108,29 +108,29 @@ python -m cli.main visualize results.json --plot-type network
 ## Component Descriptions
 
 ### Core Components (`src/core/`)
-- **algorithms/**: Core localization algorithms (MPS, belief propagation)
-- **mps_core/**: Message Passing Scheme implementation
-- **graph_theoretic/**: Graph-based localization
-- **visualization/**: Unified plotting and visualization tools
-- **utils/**: Shared utilities and helpers
+- algorithms/: Core localization algorithms (MPS, belief propagation)
+- mps_core/: Message Passing Scheme implementation
+- graph_theoretic/: Graph-based localization
+- visualization/: Unified plotting and visualization tools
+- utils/: Shared utilities and helpers
 
 ### Main Applications
 
 #### Simulation (`src/simulation/`)
-- **Purpose**: Theoretical performance with ideal carrier phase
-- **Technology**: Carrier phase @ 2.4 GHz
-- **RMSE**: 0.1-0.2mm
-- **Meets S-band**: ✓
+- Purpose: Theoretical performance with ideal carrier phase
+- Technology: Carrier phase @ 2.4 GHz
+- RMSE: 0.1-0.2mm
+- Meets S-band: ✓
 
 #### Emulation (`src/emulation/`)
-- **Purpose**: Real constraints with Python timing
-- **Technology**: Computer clock
-- **RMSE**: 600-1000mm
-- **Meets S-band**: ✗
+- Purpose: Real constraints with Python timing
+- Technology: Computer clock
+- RMSE: 600-1000mm
+- Meets S-band: ✗
 
 #### Hardware (`src/hardware/`)
-- **Purpose**: Interface for real RF hardware
-- **Status**: Ready for integration
+- Purpose: Interface for real RF hardware
+- Status: Ready for integration
 - **Supports**: RF phase, UWB, GPS modules
 
 ## Quick Start

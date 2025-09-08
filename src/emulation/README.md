@@ -2,14 +2,14 @@
 
 ## Overview
 
-This directory demonstrates the **practical limitations** when using computer clock-based timing for localization. Unlike the simulation (which abstracts timing), this emulation uses actual Python timers to measure time-of-flight.
+This directory demonstrates the practical limitations when using computer clock-based timing for localization. Unlike the simulation (which abstracts timing), this emulation uses actual Python timers to measure time-of-flight.
 
 ## Key Finding: Why Time-Based Localization Fails
 
 Python's best timer resolution is ~41 nanoseconds, which translates to:
-- **Distance uncertainty**: ±12.3 meters
-- **Localization RMSE**: 600-1000mm
-- **Meets S-band requirement**: ❌ (needs <15mm)
+- Distance uncertainty: ±12.3 meters
+- Localization RMSE: 600-1000mm
+- Meets S-band requirement: ❌ (needs <15mm)
 
 ## Quick Start
 
@@ -73,7 +73,7 @@ network:
 | time.perf_counter() | High-res counter | ~41ns | ±12m | 600-1000mm |
 | time.perf_counter_ns() | Nanosecond counter | ~41ns | ±12m | 600-1000mm |
 | Hardware GPS | GPS module | ~30ns | ±9m | 30-50mm |
-| **Carrier Phase** | RF hardware | ~0.1ns | ±3cm | 8-12mm |
+| Carrier Phase | RF hardware | ~0.1ns | ±3cm | 8-12mm |
 
 ## Why Computer Clocks Can't Achieve S-band Requirements
 
@@ -119,9 +119,9 @@ rtt = (t4 - t1) - (t3 - t2)
 
 ## Key Insights
 
-1. **Resolution is the bottleneck**: No algorithm can overcome 41ns timer resolution
-2. **Distance = Time × Speed of Light**: 41ns = 12.3 meters
-3. **S-band needs hardware**: Requires carrier phase measurement, not time measurement
+1. Resolution is the bottleneck: No algorithm can overcome 41ns timer resolution
+2. Distance = Time × Speed of Light: 41ns = 12.3 meters
+3. S-band needs hardware: Requires carrier phase measurement, not time measurement
 
 ## Comparison to Simulation
 
@@ -155,15 +155,15 @@ print(f"Sync accuracy: {network.get_sync_error()}mm")
 ## Limitations
 
 This emulation demonstrates that:
-1. **Python/software timing is insufficient** for S-band requirements
-2. **Hardware timestamps are necessary** for sub-meter ranging
-3. **Carrier phase measurement** (not time) is the solution
+1. Python/software timing is insufficient for S-band requirements
+2. Hardware timestamps are necessary for sub-meter ranging
+3. Carrier phase measurement (not time) is the solution
 
 ## Next Steps
 
-1. **See simulation/** for theoretical performance with carrier phase
-2. **See hardware/** for interfacing with real RF hardware
-3. **Consider FPGA/ASIC** for deterministic timing
+1. See simulation/ for theoretical performance with carrier phase
+2. See hardware/ for interfacing with real RF hardware
+3. Consider FPGA/ASIC for deterministic timing
 
 ## References
 
