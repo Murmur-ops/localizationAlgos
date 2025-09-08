@@ -5,7 +5,7 @@ carrier_phase:
   frequency_ghz: 2.4
   phase_noise_milliradians: 1.0  # 1 mrad = ~2mm error
   frequency_stability_ppb: 0.1
-  coarse_time_accuracy_ns: 1.0
+  coarse_time_accuracy_ns: 0.05  # 50 picoseconds for S-band
 
 network:
   n_sensors: 10  # Small network for testing

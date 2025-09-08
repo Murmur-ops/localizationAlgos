@@ -39,8 +39,7 @@ class MPSConfig:
     """Configuration for MPS algorithm"""
     n_sensors: int = 30
     n_anchors: int = 6
-    scale: float = 50.0  # Network scale in meters
-    communication_range: float = 0.3  # As fraction of scale
+    communication_range: float = 0.3
     noise_factor: float = 0.05
     gamma: float = 0.99
     alpha: float = 1.0
@@ -94,35 +93,32 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         d = self.config.dimension
         
-        # Generate random true positions scaled to network size
+        # Generate random true positions
         self.true_positions = {}
-        scale = self.config.scale
         for i in range(n):
-            self.true_positions[i] = np.random.uniform(0, scale, d)
+            self.true_positions[i] = np.random.uniform(0, 1, d)
         
         # Generate anchor positions (well-distributed)
         if self.config.n_anchors > 0:
             if d == 2 and self.config.n_anchors >= 4:
-                # Place anchors at corners for 2D (scaled to network size)
+                # Place anchors at corners for 2D
                 self.anchor_positions = np.array([
-                    [0.1*scale, 0.1*scale], [0.9*scale, 0.1*scale], 
-                    [0.9*scale, 0.9*scale], [0.1*scale, 0.9*scale]
+                    [0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]
                 ])
                 # Add more anchors if needed
                 for i in range(4, self.config.n_anchors):
                     self.anchor_positions = np.vstack([
                         self.anchor_positions,
-                        np.random.uniform(0.2*scale, 0.8*scale, d)
+                        np.random.uniform(0.2, 0.8, d)
                     ])
                 self.anchor_positions = self.anchor_positions[:self.config.n_anchors]
             else:
-                self.anchor_positions = np.random.uniform(0, scale, (self.config.n_anchors, d))
+                self.anchor_positions = np.random.uniform(0, 1, (self.config.n_anchors, d))
         
-        # Build adjacency matrix (scale communication range)
-        comm_range = self.config.communication_range * scale
+        # Build adjacency matrix
         self.adjacency = MatrixOperations.build_adjacency(
             self.true_positions, 
-            comm_range
+            self.config.communication_range
         )
         
         # Generate noisy distance measurements
@@ -162,7 +158,7 @@ class MPSAlgorithm:
                         true_dist = np.linalg.norm(
                             self.true_positions[i] - self.anchor_positions[k]
                         )
-                        if true_dist <= self.config.communication_range * self.config.scale:
+                        if true_dist <= self.config.communication_range:
                             noisy_dist = true_dist * (1 + noise * np.random.randn())
                             self.anchor_distances[i][k] = max(0.01, noisy_dist)
     
@@ -189,31 +185,18 @@ class MPSAlgorithm:
                     measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
                     wrapped_phase = np.angle(np.exp(1j * measured_phase))
                     
-                    # Improved ambiguity resolution using iterative refinement
-                    # Start with coarse estimate
-                    coarse_accuracy_for_sband = min(coarse_accuracy_m, wavelength / 8)  # Tighter bound
-                    coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_for_sband)
+                    # Coarse distance for ambiguity resolution
+                    # With picosecond timing (e.g., 50ps = 15mm), we can resolve ambiguity
+                    coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
                     
-                    # Get initial wavelength count
-                    n_wavelengths_float = coarse_dist / wavelength
-                    n_wavelengths = np.round(n_wavelengths_float)
+                    # Integer wavelength count - with ps timing, this is unambiguous
+                    n_wavelengths = np.round(coarse_dist / wavelength)
                     
-                    # Fine phase measurement
-                    fine_phase_normalized = wrapped_phase / (2 * np.pi)  # Normalize to [0,1)
-                    if fine_phase_normalized < 0:
-                        fine_phase_normalized += 1
+                    # Fine phase measurement gives sub-mm precision
+                    fine_offset = (wrapped_phase * wavelength) / (2 * np.pi)
                     
-                    # Combine coarse and fine measurements
-                    # Check if we're near a wavelength boundary
-                    fractional_part = n_wavelengths_float - np.floor(n_wavelengths_float)
-                    if abs(fractional_part - fine_phase_normalized) > 0.5:
-                        # Likely off by one wavelength
-                        if fractional_part > fine_phase_normalized:
-                            n_wavelengths = np.floor(n_wavelengths_float)
-                        else:
-                            n_wavelengths = np.ceil(n_wavelengths_float)
-                    
-                    measured_dist = n_wavelengths * wavelength + fine_phase_normalized * wavelength
+                    # Combined measurement: coarse (unambiguous) + fine (precise)
+                    measured_dist = n_wavelengths * wavelength + fine_offset
                     
                     self.distance_measurements[(i, j)] = max(0.001, measured_dist)
                     self.distance_measurements[(j, i)] = self.distance_measurements[(i, j)]
@@ -226,27 +209,25 @@ class MPSAlgorithm:
                     true_dist = np.linalg.norm(
                         self.true_positions[i] - self.anchor_positions[k]
                     )
-                    if true_dist <= self.config.communication_range * self.config.scale:
+                    if true_dist <= self.config.communication_range:
                         # Same carrier phase approach for anchors
                         true_phase = (2 * np.pi * true_dist) / wavelength
                         measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
                         wrapped_phase = np.angle(np.exp(1j * measured_phase))
                         
-                        coarse_accuracy_for_sband = min(coarse_accuracy_m, wavelength / 4)
-                        coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_for_sband)
+                        # With picosecond timing, no ambiguity
+                        coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
                         n_wavelengths = np.round(coarse_dist / wavelength)
                         
-                        fine_distance = (wrapped_phase * wavelength) / (2 * np.pi)
-                        if fine_distance < 0:
-                            fine_distance += wavelength
-                        measured_dist = n_wavelengths * wavelength + fine_distance
+                        # Fine phase for sub-mm precision
+                        fine_offset = (wrapped_phase * wavelength) / (2 * np.pi)
+                        measured_dist = n_wavelengths * wavelength + fine_offset
                         self.anchor_distances[i][k] = max(0.001, measured_dist)
     
     def initialize_state(self) -> MPSState:
         """Initialize algorithm state"""
         n = self.config.n_sensors
         d = self.config.dimension
-        scale = self.config.scale
         
         # Initialize positions
         positions = {}
@@ -255,10 +236,10 @@ class MPSAlgorithm:
                 # Initialize near anchors if available
                 anchor_ids = list(self.anchor_distances[i].keys())
                 positions[i] = np.mean(self.anchor_positions[anchor_ids], axis=0)
-                positions[i] += 0.1 * scale * np.random.randn(d)  # Small perturbation scaled
+                positions[i] += 0.1 * np.random.randn(d)  # Small perturbation
             else:
-                # Random initialization scaled to network size
-                positions[i] = np.random.uniform(0, scale, d)
+                # Random initialization
+                positions[i] = np.random.uniform(0, 1, d)
         
         # Initialize algorithm variables (2-block structure)
         X = np.zeros((2*n, d))
@@ -290,15 +271,6 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         X_new = state.X.copy()
         
-        # Adaptive alpha based on measurement precision
-        if self.config.carrier_phase:
-            # For millimeter measurements, use much smaller step sizes
-            sensor_alpha = self.config.alpha / 1000  # Scale down for mm precision
-            anchor_alpha = self.config.alpha / 500   # Anchors get stronger weight
-        else:
-            sensor_alpha = self.config.alpha / 10
-            anchor_alpha = self.config.alpha / 5
-        
         for i in range(n):
             # Apply distance constraints
             position = X_new[i]
@@ -309,7 +281,7 @@ class MPSAlgorithm:
                     measured_dist = self.distance_measurements[(i, j)]
                     position = ProximalOperators.prox_distance(
                         position, X_new[j], measured_dist, 
-                        alpha=sensor_alpha
+                        alpha=self.config.alpha / 10
                     )
             
             # Sensor-to-anchor constraints
@@ -317,17 +289,15 @@ class MPSAlgorithm:
                 for k, measured_dist in self.anchor_distances[i].items():
                     position = ProximalOperators.prox_distance(
                         position, self.anchor_positions[k], measured_dist,
-                        alpha=anchor_alpha
+                        alpha=self.config.alpha / 5
                     )
             
             # Update both blocks
             X_new[i] = position
             X_new[i + n] = position
             
-            # Box constraint to keep positions bounded (scaled)
-            X_new[i] = ProximalOperators.prox_box_constraint(
-                X_new[i], -0.1 * self.config.scale, 1.1 * self.config.scale
-            )
+            # Box constraint to keep positions bounded
+            X_new[i] = ProximalOperators.prox_box_constraint(X_new[i], -0.5, 1.5)
             X_new[i + n] = X_new[i]
         
         return X_new
@@ -424,12 +394,6 @@ class MPSAlgorithm:
                 
                 # Check convergence
                 change = np.linalg.norm(state.X - X_old) / (np.linalg.norm(X_old) + 1e-10)
-                
-                # Print diagnostics every 100 iterations for carrier phase
-                if self.config.carrier_phase and iteration % 100 == 0:
-                    if len(objective_history) > 0 and len(rmse_history) > 0:
-                        print(f"  Iter {iteration}: obj={objective_history[-1]:.6f}, rmse={rmse_history[-1]:.6f}m, change={change:.6e}")
-                
                 if change < self.config.tolerance:
                     state.converged = True
                     state.iteration = iteration
@@ -450,8 +414,5 @@ class MPSAlgorithm:
             'objective_history': objective_history,
             'rmse_history': rmse_history,
             'final_positions': dict(state.positions),
-            'estimated_positions': dict(state.positions),
-            'true_positions': dict(self.true_positions) if self.true_positions else {},
-            'anchor_positions': self.anchor_positions.tolist() if self.anchor_positions is not None else [],
             'config': self.config
         }

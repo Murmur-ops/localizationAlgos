@@ -19,8 +19,9 @@ carrier_phase:
   frequency_stability_ppb: 0.1  # 0.1 parts per billion
   
   # Coarse time sync for ambiguity resolution
-  # Only needs to be better than λ/2 = 6.25 cm
-  coarse_time_accuracy_ns: 1.0  # 1 ns = 30 cm (sufficient)
+  # For S-band 15mm accuracy, need ~50 picoseconds
+  # Using 0.05 ns = 50 picoseconds = 15mm range accuracy
+  coarse_time_accuracy_ns: 0.05  # 50 picoseconds = 15mm (S-band requirement)
 
 # ============================================================================
 # TIME SYNCHRONIZATION
@@ -34,7 +35,7 @@ time_sync:
   initial_offset_ns: 1000  # 1 microsecond initial offset
   
   # Target accuracy after TWTT
-  target_accuracy_ns: 1.0  # 1 ns (30 cm) for ambiguity resolution
+  target_accuracy_ns: 0.05  # 50 ps (15mm) for S-band requirement
   
   # Number of TWTT exchanges
   num_exchanges: 10
