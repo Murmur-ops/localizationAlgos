@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def cmd_simulate(args):
     """Run carrier phase synchronization simulation"""
-    from simulation.src.run_phase_sync_simulation import CarrierPhaseSimulation
+    from simulation.run_phase_sync_simulation import CarrierPhaseSimulation
     
     print("Running carrier phase synchronization simulation...")
     sim = CarrierPhaseSimulation(args.config)
@@ -24,11 +24,11 @@ def cmd_simulate(args):
 def cmd_emulate(args):
     """Run timing emulation with Python constraints"""
     if args.test == "timing":
-        from emulation.src.test_python_timing_limits import main as test_timing
+        from emulation.test_python_timing_limits import main as test_timing
         print("Testing Python timing limitations...")
         test_timing()
     elif args.test == "twtt":
-        from emulation.src.time_sync.twtt import main as test_twtt
+        from emulation.twtt import main as test_twtt
         print("Running Two-Way Time Transfer emulation...")
         test_twtt()
     else:
@@ -45,7 +45,7 @@ def cmd_benchmark(args):
     # Run simulation benchmark
     if args.component in ["all", "simulation"]:
         print("\n1. Simulation (Carrier Phase)...")
-        from simulation.src.run_phase_sync_simulation import CarrierPhaseSimulation
+        from simulation.run_phase_sync_simulation import CarrierPhaseSimulation
         config_path = Path(__file__).parent.parent / "simulation/config/phase_sync_sim.yaml"
         sim = CarrierPhaseSimulation(str(config_path))
         # Run quietly
@@ -56,7 +56,7 @@ def cmd_benchmark(args):
     # Run emulation benchmark
     if args.component in ["all", "emulation"]:
         print("\n2. Emulation (Python Timing)...")
-        from emulation.src.test_python_timing_limits import PythonTimingLimits
+        from emulation.test_python_timing_limits import PythonTimingLimits
         tester = PythonTimingLimits()
         tester.test_timer_resolution(num_samples=1000)
     

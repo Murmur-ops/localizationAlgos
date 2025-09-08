@@ -42,10 +42,21 @@ htmlcov/
 .hypothesis/
 
 # Results and temporary files
-results/temp/
+results/
 *.log
 *.tmp
 *.bak
+
+# Simulation outputs
+*.json
+*.png
+!.claude/settings.local.json
+figures/
+visualizations/
+data/*.json
+data/*.png
+demo_results/
+test_results/
 
 # Large data files
 *.pkl

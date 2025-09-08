@@ -15,7 +15,7 @@ Python's best timer resolution is ~41 nanoseconds, which translates to:
 
 ### 1. Test Python Timing Limits
 ```bash
-cd src/emulation/src
+cd src/emulation
 python test_python_timing_limits.py
 ```
 
@@ -30,13 +30,13 @@ time.perf_counter_ns():
 ### 2. Run Time Synchronization Algorithms
 ```bash
 # Two-Way Time Transfer (TWTT)
-python -m time_sync.twtt
+python twtt.py
 
 # Frequency synchronization
-python -m time_sync.frequency_sync
+python frequency_sync.py
 
 # Consensus clock
-python -m time_sync.consensus_clock
+python consensus_clock.py
 ```
 
 ## Directory Structure
@@ -44,13 +44,12 @@ python -m time_sync.consensus_clock
 emulation/
 ├── config/                 # YAML configurations
 │   └── time_sync_emulation.yaml
-├── src/                    # Emulation source code
-│   ├── test_python_timing_limits.py
-│   └── time_sync/         # Synchronization algorithms
-│       ├── twtt.py        # Two-way time transfer
-│       ├── frequency_sync.py
-│       └── consensus_clock.py
-└── results/               # Emulation results
+├── test_python_timing_limits.py  # Test Python timer resolution
+├── twtt.py                # Two-way time transfer
+├── frequency_sync.py      # Frequency synchronization
+├── consensus_clock.py     # Consensus clock algorithm
+├── honest_summary.py      # Honest timing assessment
+└── results/               # Emulation results (gitignored)
 ```
 
 ## Configuration Options

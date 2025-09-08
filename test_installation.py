@@ -212,7 +212,7 @@ def main():
         print("\nYou can now run:")
         print("  python scripts/run_mps.py --config configs/quick_test.yaml")
         print("  python experiments/run_comparison.py")
-        print("  python src/simulation/src/run_phase_sync_simulation.py")
+        print("  python src/simulation/run_phase_sync_simulation.py")
         print("\nFor MPI (if installed):")
         print("  mpirun -n 2 python scripts/run_distributed.py")
     else:

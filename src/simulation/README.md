@@ -34,7 +34,7 @@ With carrier phase synchronization at 2.4 GHz (S-band):
 
 ### 1. Run Default Simulation
 ```bash
-cd simulation/src
+cd simulation
 python run_phase_sync_simulation.py
 ```
 
@@ -63,13 +63,11 @@ python run_phase_sync_simulation.py --config ../config/your_config.yaml
 simulation/
 ├── config/              # YAML configuration files
 │   └── phase_sync_sim.yaml
-├── src/                 # Simulation source code
-│   └── run_phase_sync_simulation.py
-├── visualizations/      # Generated plots
-│   ├── network_trial_0.png
-│   ├── convergence_trial_0.png
-│   └── rmse_comparison.png
-└── results/            # Simulation results (JSON)
+├── run_phase_sync_simulation.py  # Main simulation script
+├── simulate_ideal_phase_sync.py  # Ideal phase sync simulation
+├── simulate_nanzer_plus_mps.py   # Nanzer+MPS integration
+├── visualizations/      # Generated plots (gitignored)
+└── results/            # Simulation results (gitignored)
 ```
 
 ## Configuration Options
