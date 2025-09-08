@@ -104,28 +104,37 @@ def detect_visualization_types(data: Dict) -> List[str]:
     """
     types = []
     
+    # Check if data is nested under 'results' key (common format from run_mps.py)
+    if 'results' in data and isinstance(data['results'], dict):
+        # Flatten the structure for visualization
+        results_data = data['results']
+        # Merge with top-level data for backwards compatibility
+        check_data = {**data, **results_data}
+    else:
+        check_data = data
+    
     # Check for network/position data
-    if any(k in data for k in ['final_positions', 'estimated_positions', 
+    if any(k in check_data for k in ['final_positions', 'estimated_positions', 
                                'true_positions', 'sensor_positions']):
         types.append('network')
     
     # Check for convergence data
-    if any(k in data for k in ['rmse_history', 'objective_history', 
+    if any(k in check_data for k in ['rmse_history', 'objective_history', 
                                'iterations', 'convergence']):
         types.append('convergence')
     
     # Check for comparison data
-    if any(k in data for k in ['mps', 'admm', 'algorithms', 
+    if any(k in check_data for k in ['mps', 'admm', 'algorithms', 
                                'comparison', 'mps_results', 'admm_results']):
         types.append('comparison')
     
     # Check for error distribution data
-    if any(k in data for k in ['error_distribution', 'spatial_errors',
+    if any(k in check_data for k in ['error_distribution', 'spatial_errors',
                                'localization_errors', 'error_map']):
         types.append('heatmap')
     
     # Check for precision/S-band data
-    if any(k in data for k in ['millimeter_errors', 'precision_errors',
+    if any(k in check_data for k in ['millimeter_errors', 'precision_errors',
                                'carrier_phase', 'sband_results']):
         types.append('precision')
     
@@ -236,6 +245,17 @@ Examples:
         else:
             data = load_data(args.input)
         
+        # Handle nested results structure
+        if 'results' in data and isinstance(data['results'], dict):
+            # Flatten for visualization while keeping config info
+            viz_data = {**data['results']}
+            if 'configuration' in data:
+                viz_data['configuration'] = data['configuration']
+            if 'timestamp' in data:
+                viz_data['timestamp'] = data['timestamp']
+        else:
+            viz_data = data
+        
         # Determine plot types
         if args.type and 'all' in args.type:
             plot_types = None  # Will auto-detect all
@@ -258,7 +278,7 @@ Examples:
         # Generate visualizations
         print(f"\nGenerating visualizations...")
         saved_files = viz.visualize_results(
-            data,
+            viz_data,
             plot_types=plot_types,
             show=args.show,
             save=not args.no_save

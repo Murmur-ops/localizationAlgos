@@ -98,6 +98,66 @@ class NetworkVisualizer:
         
         return fig
     
+    def plot_network(self, results: Dict, fig=None) -> plt.Figure:
+        """
+        Create network visualization from results dictionary.
+        
+        Args:
+            results: Dictionary containing position data
+            fig: Existing figure to plot on
+            
+        Returns:
+            Matplotlib figure
+        """
+        if fig is None:
+            fig = plt.figure(figsize=self.fig_size, dpi=self.dpi)
+        
+        # Extract positions from results
+        true_positions = results.get('true_positions', {})
+        estimated_positions = results.get('estimated_positions', 
+                                        results.get('final_positions', {}))
+        anchor_positions = results.get('anchor_positions', {})
+        
+        # Convert anchor positions to array if it's a dict
+        if isinstance(anchor_positions, dict):
+            anchor_array = np.array(list(anchor_positions.values())) if anchor_positions else np.array([])
+        else:
+            anchor_array = anchor_positions if len(anchor_positions) > 0 else np.array([])
+        
+        # Get network scale
+        network_scale = results.get('network_scale', 50.0)
+        if 'configuration' in results and 'network' in results['configuration']:
+            network_scale = results['configuration']['network'].get('scale', 50.0)
+        
+        # If we have positions data, use full plotting
+        if true_positions or estimated_positions:
+            return self.plot_network_scenario(
+                true_positions=true_positions,
+                estimated_positions=estimated_positions,
+                anchor_positions=anchor_array,
+                network_scale=network_scale,
+                title="Network Localization Results"
+            )
+        else:
+            # Simple plot if only final positions available
+            ax = fig.add_subplot(111)
+            if 'final_positions' in results:
+                positions = results['final_positions']
+                if isinstance(positions, dict):
+                    # Convert position values to numpy arrays
+                    pos_list = [np.array(v) if not isinstance(v, np.ndarray) else v 
+                               for v in positions.values()]
+                    if pos_list and len(pos_list[0]) >= 2:
+                        pos_array = np.array(pos_list)
+                        ax.scatter(pos_array[:, 0], pos_array[:, 1], 
+                                 s=self.marker_size, alpha=0.7, label='Sensors')
+                ax.set_xlabel('X Position')
+                ax.set_ylabel('Y Position')
+                ax.set_title('Final Network Positions')
+                ax.grid(True, alpha=0.3)
+                ax.legend()
+            return fig
+    
     def _plot_topology(self, ax, true_pos, est_pos, anchors, scale):
         """Plot network topology with positions"""
         # Plot error lines first (so they're behind markers)
@@ -121,17 +181,19 @@ class NetworkVisualizer:
             ax.scatter(est_x, est_y, c='red', marker='x', 
                       s=self.marker_size, label='Estimated', zorder=3)
         
-        # Plot anchors
-        ax.scatter(anchors[:, 0], anchors[:, 1], c='green', 
-                  marker='^', s=self.anchor_size, 
-                  label='Anchors', edgecolor='black', 
+        # Plot anchors if available
+        if anchors is not None and len(anchors) > 0 and len(anchors.shape) == 2:
+            ax.scatter(anchors[:, 0], anchors[:, 1], c='green', 
+                      marker='^', s=self.anchor_size, 
+                      label='Anchors', edgecolor='black', 
                   linewidth=1, zorder=4)
         
         # Add anchor labels
-        for i, anchor in enumerate(anchors):
-            ax.annotate(f'A{i}', (anchor[0], anchor[1]),
-                       xytext=(5, 5), textcoords='offset points',
-                       fontsize=self.font_size-2)
+        if anchors is not None and len(anchors) > 0 and len(anchors.shape) == 2:
+            for i, anchor in enumerate(anchors):
+                ax.annotate(f'A{i}', (anchor[0], anchor[1]),
+                           xytext=(5, 5), textcoords='offset points',
+                           fontsize=self.font_size-2)
         
         ax.set_xlim(-scale*0.1, scale*1.1)
         ax.set_ylim(-scale*0.1, scale*1.1)
