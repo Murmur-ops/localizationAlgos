@@ -7,8 +7,8 @@ from numpy.linalg import norm
 from typing import Dict, Optional
 import networkx as nx
 
-from algorithms.smart_integrator import SmartIntegrator
-from algorithms.estimate_fusion import EstimateWithUncertainty
+from src.core.algorithms.smart_integrator import SmartIntegrator
+from src.core.algorithms.estimate_fusion import EstimateWithUncertainty
 
 
 class UnifiedLocalizerV2:

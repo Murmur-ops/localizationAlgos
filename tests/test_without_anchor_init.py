@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 
@@ -71,7 +71,7 @@ def test_without_anchor_init():
         def _initialize_variables(self):
             """Override to use ONLY random initialization"""
             n = self.n_sensors
-            from algorithms.mps_proper import MPSState
+            from src.core.algorithms.mps_proper import MPSState
             state = MPSState(
                 positions={},
                 Y=np.zeros((2 * n, self.d)),
@@ -138,7 +138,7 @@ def test_without_anchor_init():
                     if (i, j) in self.distance_measurements:
                         measured_dist = self.distance_measurements[(i, j)]
                         # Simple gradient descent
-                        from algorithms.proximal_operators import ProximalOperators
+                        from src.core.algorithms.proximal_operators import ProximalOperators
                         X_new[i] = ProximalOperators.prox_distance_constraint(
                             X_new[i], X_new[j], measured_dist, 
                             alpha=self.alpha / (len(self.distance_measurements) + 1)

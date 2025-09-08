@@ -6,8 +6,8 @@ Comprehensive evaluation of all integrated methods
 
 import numpy as np
 import matplotlib.pyplot as plt
-from algorithms.unified_localizer import UnifiedLocalizer
-from algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.unified_localizer import UnifiedLocalizer
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

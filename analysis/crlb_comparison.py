@@ -12,9 +12,9 @@ from typing import Dict, List, Tuple
 import time
 import json
 
-from algorithms.mps_proper import ProperMPSAlgorithm
-from algorithms.mps_advanced import AdvancedMPSAlgorithm
-from algorithms.admm import DecentralizedADMM
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.mps_advanced import AdvancedMPSAlgorithm
+from src.core.algorithms.admm import DecentralizedADMM
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

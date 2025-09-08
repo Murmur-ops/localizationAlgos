@@ -2,8 +2,8 @@
 """Debug unified system components"""
 
 import numpy as np
-from algorithms.bp_simple import SimpleBeliefPropagation
-from algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.bp_simple import SimpleBeliefPropagation
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 # Test parameters
@@ -51,7 +51,7 @@ print(f"  BP:  RMSE={bp_result['final_error']:.4f}, Efficiency={bp_eff:.1f}%")
 print(f"  MPS: RMSE={mps_result['final_error']:.4f}, Efficiency={mps_eff:.1f}%")
 
 # Now test hierarchical alone
-from algorithms.hierarchical_processing import HierarchicalProcessor
+from src.core.algorithms.hierarchical_processing import HierarchicalProcessor
 
 hier = HierarchicalProcessor(
     n_sensors=n_sensors,

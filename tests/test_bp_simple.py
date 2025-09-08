@@ -2,8 +2,8 @@
 """Test simplified BP"""
 
 import numpy as np
-from algorithms.bp_simple import SimpleBeliefPropagation
-from algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.bp_simple import SimpleBeliefPropagation
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 # Parameters

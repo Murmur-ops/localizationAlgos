@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from graph_theoretic.graph_localization_core import GraphLocalizationCore
 from graph_theoretic.graph_signal_processing import GraphSignalProcessor
-from algorithms.mps_proper import ProperMPSAlgorithm, MPSState
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm, MPSState
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

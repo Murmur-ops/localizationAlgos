@@ -60,14 +60,14 @@ python -c "from mpi4py import MPI; print('MPI support: OK')"
 
 Test Simulation (Ideal Hardware):
 ```bash
-cd simulation/src
+cd src/simulation
 python run_phase_sync_simulation.py
 # Expected: RMSE ~0.14mm
 ```
 
 Test Emulation (Python Timing):
 ```bash
-cd emulation/src
+cd src/emulation
 python test_python_timing_limits.py
 # Expected: Shows ~41ns timer resolution
 ```

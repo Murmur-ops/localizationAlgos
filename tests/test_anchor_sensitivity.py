@@ -6,9 +6,9 @@ Test how performance scales from 4 to 12 anchors
 
 import numpy as np
 import matplotlib.pyplot as plt
-from algorithms.unified_localizer_v2 import UnifiedLocalizerV2
-from algorithms.mps_proper import ProperMPSAlgorithm
-from algorithms.bp_simple import SimpleBeliefPropagation
+from src.core.algorithms.unified_localizer_v2 import UnifiedLocalizerV2
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.bp_simple import SimpleBeliefPropagation
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

@@ -8,10 +8,10 @@ from numpy.linalg import norm
 from typing import Dict, Optional
 import networkx as nx
 
-from algorithms.bp_simple import SimpleBeliefPropagation
-from algorithms.hierarchical_processing import HierarchicalProcessor
-from algorithms.adaptive_weighting import AdaptiveWeighting
-from algorithms.consensus_optimizer import ConsensusOptimizer
+from src.core.algorithms.bp_simple import SimpleBeliefPropagation
+from src.core.algorithms.hierarchical_processing import HierarchicalProcessor
+from src.core.algorithms.adaptive_weighting import AdaptiveWeighting
+from src.core.algorithms.consensus_optimizer import ConsensusOptimizer
 
 
 class UnifiedLocalizer:

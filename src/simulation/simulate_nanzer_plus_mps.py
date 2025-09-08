@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
 import time
-from algorithms.mps_advanced import AdvancedMPSAlgorithm
+from src.core.algorithms.mps_advanced import AdvancedMPSAlgorithm
 
 
 @dataclass

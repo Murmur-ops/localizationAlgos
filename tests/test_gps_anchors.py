@@ -12,8 +12,8 @@ import time
 from typing import Dict, Tuple, List
 import matplotlib.pyplot as plt
 
-from algorithms.time_sync.twtt import RealTWTT
-from algorithms.mps_advanced import AdvancedMPSAlgorithm
+from src.core.algorithms.time_sync.twtt import RealTWTT
+from src.core.algorithms.mps_advanced import AdvancedMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

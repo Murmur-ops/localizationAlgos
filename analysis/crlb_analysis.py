@@ -13,8 +13,8 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import json
 
-from algorithms.mps_proper import ProperMPSAlgorithm
-from algorithms.admm import DecentralizedADMM
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.admm import DecentralizedADMM
 
 
 @dataclass

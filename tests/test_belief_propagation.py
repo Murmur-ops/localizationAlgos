@@ -5,8 +5,8 @@ Test Belief Propagation implementation
 
 import numpy as np
 import matplotlib.pyplot as plt
-from algorithms.belief_propagation import BeliefPropagation
-from algorithms.mps_proper import ProperMPSAlgorithm
+from src.core.algorithms.belief_propagation import BeliefPropagation
+from src.core.algorithms.mps_proper import ProperMPSAlgorithm
 from analysis.crlb_analysis import CRLBAnalyzer
 
 

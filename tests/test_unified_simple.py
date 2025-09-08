@@ -2,7 +2,7 @@
 """Simple test of unified system"""
 
 import numpy as np
-from algorithms.unified_localizer import UnifiedLocalizer
+from src.core.algorithms.unified_localizer import UnifiedLocalizer
 from analysis.crlb_analysis import CRLBAnalyzer
 
 # Small test
