@@ -2,11 +2,11 @@
 
 ## Overview
 
-This directory contains simulations that demonstrate the **theoretical performance** achievable when combining:
-1. **Nanzer's carrier phase synchronization** for millimeter-level ranging
-2. **Decentralized MPS algorithm** for distributed localization
+This directory contains simulations that demonstrate the theoretical performance achievable when combining:
+1. Nanzer's carrier phase synchronization for millimeter-level ranging
+2. Decentralized MPS algorithm for distributed localization
 
-Here, we **abstract away timing limitations** and simulate what would be possible with ideal hardware.
+These simulations abstract away timing limitations to explore performance with ideal hardware.
 
 ## Key Concept: Carrier Phase vs Time-of-Flight
 
@@ -25,10 +25,10 @@ Advantage: Milliradian phase measurement → millimeter ranging
 ## Expected Performance
 
 With carrier phase synchronization at 2.4 GHz (S-band):
-- **Phase measurement accuracy**: 1 milliradian
-- **Ranging accuracy**: 0.02-0.12 mm
-- **Localization RMSE**: 8-12 mm
-- **Meets S-band requirement**: ✓ (<15 mm)
+- Phase measurement accuracy: 1 milliradian
+- Ranging accuracy: 0.02-0.12 mm
+- Localization RMSE: 8-12 mm
+- Meets S-band requirement: ✓ (<15 mm)
 
 ## Quick Start
 
@@ -141,18 +141,18 @@ localization_rmse ≈ ranging_error × √(geometry_factor)
 | No Sync (5% noise) | 5cm @ 1m | 14.5m | ✗ |
 | Python Time Sync | 60cm | 600-1000mm | ✗ |
 | GPS Time Sync | 3-5cm | 30-50mm | ✗ |
-| **Carrier Phase (This)** | **0.02-0.12mm** | **8-12mm** | **✓** |
+| Carrier Phase (This) | 0.02-0.12mm | 8-12mm | ✓ |
 
 ## Key Insights
 
-1. **Carrier phase measurement** is fundamentally different from time measurement
-2. **Milliradian phase accuracy** is achievable with standard RF hardware
-3. **Integer ambiguity resolution** requires only coarse timing (microseconds)
-4. **Decentralized MPS** preserves the ranging accuracy through optimization
+1. Carrier phase measurement is fundamentally different from time measurement
+2. Milliradian phase accuracy is achievable with standard RF hardware
+3. Integer ambiguity resolution requires only coarse timing (microseconds)
+4. Decentralized MPS preserves the ranging accuracy through optimization
 
 ## Limitations
 
-This is a **simulation** that assumes:
+This is a simulation that assumes:
 - Perfect integer ambiguity resolution
 - No multipath or environmental effects
 - Ideal RF hardware performance
@@ -168,6 +168,6 @@ For real-world constraints, see the `emulation/` directory.
 
 ## Next Steps
 
-1. **Emulation**: See `../emulation/` for Python timing limitations
-2. **Hardware**: See `../hardware_ready/` for real implementation requirements
-3. **Extend**: Modify configuration for different frequencies or network scales
+1. Emulation: See `../emulation/` for Python timing limitations
+2. Hardware: See `../hardware_ready/` for real implementation requirements
+3. Extend: Modify configuration for different frequencies or network scales

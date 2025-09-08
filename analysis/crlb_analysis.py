@@ -1,8 +1,6 @@
 """
 CRLB (Cramér-Rao Lower Bound) Analysis for Sensor Network Localization
-Compares REAL algorithm performance against theoretical limits
-
-NO MOCK DATA - all results from actual algorithm execution
+Compares algorithm performance against theoretical limits
 """
 
 import numpy as np
@@ -37,8 +35,7 @@ class CRLBResult:
 
 class CRLBAnalyzer:
     """
-    Analyze real algorithm performance against CRLB
-    NO SIMULATED DATA - runs actual algorithms
+    Analyze algorithm performance against CRLB
     """
     
     def __init__(self,
@@ -257,7 +254,7 @@ class CRLBAnalyzer:
     
     def analyze_performance(self, noise_factors: List[float]) -> List[CRLBResult]:
         """
-        Analyze REAL algorithm performance vs CRLB
+        Analyze algorithm performance vs CRLB
         
         Args:
             noise_factors: List of noise levels to test
@@ -310,11 +307,11 @@ class CRLBAnalyzer:
 
 
 def run_crlb_analysis():
-    """Run CRLB analysis with real algorithms"""
+    """Run CRLB analysis with algorithms"""
     
     print("="*70)
-    print("CRLB ANALYSIS WITH REAL ALGORITHMS")
-    print("NO MOCK DATA - All results from actual execution")
+    print("CRLB ANALYSIS")
+    print("Results from algorithm execution")
     print("="*70)
     
     # Create analyzer

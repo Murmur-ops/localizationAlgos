@@ -228,7 +228,7 @@ def visualize_comparison(comparison: Dict):
     
     # 3. Performance summary
     ax3.axis('off')
-    summary_text = f"""Performance Comparison (REAL RESULTS):
+    summary_text = f"""Performance Comparison:
     
 MPS Algorithm:
   Converged: {comparison['mps']['converged']}
@@ -244,10 +244,7 @@ ADMM Algorithm:
 
 Performance Ratio:
   MPS is {comparison['performance_ratio']:.2f}x more accurate
-  MPS converges {comparison['speedup']:.2f}x faster
-
-Note: These are REAL algorithm results,
-not simulated or mock data."""
+  MPS converges {comparison['speedup']:.2f}x faster"""
     
     ax3.text(0.1, 0.9, summary_text, transform=ax3.transAxes,
             fontsize=10, verticalalignment='top', fontfamily='monospace')
