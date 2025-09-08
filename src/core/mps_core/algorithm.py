@@ -189,12 +189,31 @@ class MPSAlgorithm:
                     measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
                     wrapped_phase = np.angle(np.exp(1j * measured_phase))
                     
-                    # Coarse distance for ambiguity resolution
-                    coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
-                    n_wavelengths = np.round(coarse_dist / wavelength)
+                    # Improved ambiguity resolution using iterative refinement
+                    # Start with coarse estimate
+                    coarse_accuracy_for_sband = min(coarse_accuracy_m, wavelength / 8)  # Tighter bound
+                    coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_for_sband)
                     
-                    # Combined measurement (millimeter accuracy)
-                    measured_dist = n_wavelengths * wavelength + (wrapped_phase * wavelength) / (2 * np.pi)
+                    # Get initial wavelength count
+                    n_wavelengths_float = coarse_dist / wavelength
+                    n_wavelengths = np.round(n_wavelengths_float)
+                    
+                    # Fine phase measurement
+                    fine_phase_normalized = wrapped_phase / (2 * np.pi)  # Normalize to [0,1)
+                    if fine_phase_normalized < 0:
+                        fine_phase_normalized += 1
+                    
+                    # Combine coarse and fine measurements
+                    # Check if we're near a wavelength boundary
+                    fractional_part = n_wavelengths_float - np.floor(n_wavelengths_float)
+                    if abs(fractional_part - fine_phase_normalized) > 0.5:
+                        # Likely off by one wavelength
+                        if fractional_part > fine_phase_normalized:
+                            n_wavelengths = np.floor(n_wavelengths_float)
+                        else:
+                            n_wavelengths = np.ceil(n_wavelengths_float)
+                    
+                    measured_dist = n_wavelengths * wavelength + fine_phase_normalized * wavelength
                     
                     self.distance_measurements[(i, j)] = max(0.001, measured_dist)
                     self.distance_measurements[(j, i)] = self.distance_measurements[(i, j)]
@@ -207,16 +226,20 @@ class MPSAlgorithm:
                     true_dist = np.linalg.norm(
                         self.true_positions[i] - self.anchor_positions[k]
                     )
-                    if true_dist <= self.config.communication_range:
+                    if true_dist <= self.config.communication_range * self.config.scale:
                         # Same carrier phase approach for anchors
                         true_phase = (2 * np.pi * true_dist) / wavelength
                         measured_phase = true_phase + np.random.normal(0, phase_noise_rad)
                         wrapped_phase = np.angle(np.exp(1j * measured_phase))
                         
-                        coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_m)
+                        coarse_accuracy_for_sband = min(coarse_accuracy_m, wavelength / 4)
+                        coarse_dist = true_dist + np.random.normal(0, coarse_accuracy_for_sband)
                         n_wavelengths = np.round(coarse_dist / wavelength)
                         
-                        measured_dist = n_wavelengths * wavelength + (wrapped_phase * wavelength) / (2 * np.pi)
+                        fine_distance = (wrapped_phase * wavelength) / (2 * np.pi)
+                        if fine_distance < 0:
+                            fine_distance += wavelength
+                        measured_dist = n_wavelengths * wavelength + fine_distance
                         self.anchor_distances[i][k] = max(0.001, measured_dist)
     
     def initialize_state(self) -> MPSState:
@@ -267,6 +290,15 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         X_new = state.X.copy()
         
+        # Adaptive alpha based on measurement precision
+        if self.config.carrier_phase:
+            # For millimeter measurements, use much smaller step sizes
+            sensor_alpha = self.config.alpha / 1000  # Scale down for mm precision
+            anchor_alpha = self.config.alpha / 500   # Anchors get stronger weight
+        else:
+            sensor_alpha = self.config.alpha / 10
+            anchor_alpha = self.config.alpha / 5
+        
         for i in range(n):
             # Apply distance constraints
             position = X_new[i]
@@ -277,7 +309,7 @@ class MPSAlgorithm:
                     measured_dist = self.distance_measurements[(i, j)]
                     position = ProximalOperators.prox_distance(
                         position, X_new[j], measured_dist, 
-                        alpha=self.config.alpha / 10
+                        alpha=sensor_alpha
                     )
             
             # Sensor-to-anchor constraints
@@ -285,7 +317,7 @@ class MPSAlgorithm:
                 for k, measured_dist in self.anchor_distances[i].items():
                     position = ProximalOperators.prox_distance(
                         position, self.anchor_positions[k], measured_dist,
-                        alpha=self.config.alpha / 5
+                        alpha=anchor_alpha
                     )
             
             # Update both blocks
@@ -392,6 +424,12 @@ class MPSAlgorithm:
                 
                 # Check convergence
                 change = np.linalg.norm(state.X - X_old) / (np.linalg.norm(X_old) + 1e-10)
+                
+                # Print diagnostics every 100 iterations for carrier phase
+                if self.config.carrier_phase and iteration % 100 == 0:
+                    if len(objective_history) > 0 and len(rmse_history) > 0:
+                        print(f"  Iter {iteration}: obj={objective_history[-1]:.6f}, rmse={rmse_history[-1]:.6f}m, change={change:.6e}")
+                
                 if change < self.config.tolerance:
                     state.converged = True
                     state.iteration = iteration
