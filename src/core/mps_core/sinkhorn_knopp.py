@@ -372,8 +372,12 @@ class MatrixParameterGenerator:
         """
         Compute lower triangular matrix L such that Z = 2I - L - L^T
         
+        From the paper: The L matrix encodes the sequential dependencies
+        in the proximal evaluations. It must be strictly lower triangular
+        to ensure proper sequential structure.
+        
         Args:
-            Z: Matrix parameter
+            Z: Matrix parameter (must satisfy diag(Z) = 2)
             
         Returns:
             Lower triangular matrix L
@@ -381,12 +385,21 @@ class MatrixParameterGenerator:
         n = Z.shape[0]
         L = np.zeros((n, n))
         
-        # Diagonal entries
-        np.fill_diagonal(L, 1.0)
+        # From Z = 2I - L - L^T, we have:
+        # - Diagonal: Z_ii = 2 - L_ii - L_ii = 2 - 2*L_ii
+        #   Therefore: L_ii = (2 - Z_ii) / 2 = 0 (since Z_ii = 2)
+        # - Off-diagonal: Z_ij = -L_ij - L_ji
+        #   For i > j (lower triangular): L_ij = -Z_ij/2, L_ji = -Z_ij/2
         
-        # Off-diagonal entries (lower triangular only)
+        # Diagonal entries should be 0 for strictly lower triangular
+        # (The paper uses strictly lower triangular L)
+        
+        # Off-diagonal entries (strictly lower triangular)
         for i in range(n):
             for j in range(i):
+                # L is strictly lower triangular
+                # From Z = 2I - L - L^T, for i > j:
+                # Z_ij = -L_ij - L_ji = -L_ij (since L_ji = 0 for j > i)
                 L[i, j] = -Z[i, j]
         
         return L

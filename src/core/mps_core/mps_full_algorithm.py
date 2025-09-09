@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .sinkhorn_knopp import SinkhornKnopp, MatrixParameterGenerator
 from .proximal_sdp import ProximalADMMSolver, ProximalOperatorsPSD
+from .vectorization import MatrixVectorizer
 
 logger = logging.getLogger(__name__)
 
@@ -275,13 +276,14 @@ class ProximalEvaluator:
         """
         return self.psd_ops.project_psd_cone(S_input)
     
-    def evaluate_parallel(self, x: List[np.ndarray], v: List[np.ndarray],
-                         L: np.ndarray, iteration: int) -> List[np.ndarray]:
+    def evaluate_sequential(self, x: List[np.ndarray], v: List[np.ndarray],
+                           L: np.ndarray, iteration: int) -> List[np.ndarray]:
         """
-        Evaluate proximal operators in parallel for 2-Block structure
+        Evaluate proximal operators sequentially with L matrix dependencies
+        Implements equation (9b) from the paper: prox(v_i + Σ_{j<i} L_ij * x_j)
         
         Args:
-            x: Current x variables
+            x: Current x variables (will be updated in place)
             v: Consensus variables
             L: Lower triangular matrix
             iteration: Current iteration number
@@ -290,69 +292,42 @@ class ProximalEvaluator:
             Updated x variables
         """
         n = self.config.n_sensors
-        x_new = [None] * (2 * n)
+        p = 2 * n  # Total number of components
+        x_new = [None] * p
         
         # Adaptive alpha scaling
         alpha = self.config.alpha
         if self.config.adaptive_alpha:
-            # Scale alpha based on iteration and measurement precision
             if self.config.carrier_phase_mode:
-                # For millimeter accuracy, use smaller alpha initially
                 alpha = self.config.alpha * (1.0 + iteration / 100.0)
             else:
                 alpha = self.config.alpha / (1.0 + iteration / 500.0)
         
-        if self.config.parallel_proximal and self.config.use_2block:
-            # Parallel evaluation for 2-Block
-            # Block 1: objectives g_i (i = 0, ..., n-1)
-            # Block 2: PSD constraints δ_i (i = n, ..., 2n-1)
+        # Sequential evaluation with L matrix dependencies
+        for i in range(p):
+            # Compute input: v_i + Σ_{j<i} L_ij * x_j^{k+1}
+            # Note: x_j^{k+1} for j < i have already been computed
+            input_val = v[i].copy()
             
-            with ThreadPoolExecutor(max_workers=min(n, 8)) as executor:
-                # Submit Block 1 evaluations
-                futures_block1 = {}
-                for i in range(n):
-                    # For 2-block, we work directly with v[i] since matrix dimensions vary
-                    # L matrix coupling is handled at the consensus level, not here
-                    input_val = v[i].copy()
-                    
-                    future = executor.submit(
-                        self.prox_objective_gi, input_val, i, alpha
-                    )
-                    futures_block1[future] = i
-                
-                # Collect Block 1 results
-                for future in as_completed(futures_block1):
-                    i = futures_block1[future]
-                    x_new[i] = future.result()
-                
-                # Submit Block 2 evaluations
-                futures_block2 = {}
-                for i in range(n, 2*n):
-                    # For PSD constraints, use v[i] directly
-                    input_val = v[i].copy()
-                    
-                    future = executor.submit(
-                        self.prox_indicator_psd, input_val
-                    )
-                    futures_block2[future] = i
-                
-                # Collect Block 2 results
-                for future in as_completed(futures_block2):
-                    i = futures_block2[future]
-                    x_new[i] = future.result()
-        
-        else:
-            # Sequential evaluation
-            for i in range(2 * n):
-                # For sequential, also use v[i] directly due to varying dimensions
-                input_val = v[i].copy()
-                
-                if i < n:
-                    # Objective proximal operator
-                    x_new[i] = self.prox_objective_gi(input_val, i, alpha)
-                else:
-                    # PSD constraint proximal operator
-                    x_new[i] = self.prox_indicator_psd(input_val)
+            # Add contributions from previous evaluations
+            for j in range(i):
+                if L[i, j] != 0 and x_new[j] is not None:
+                    # Check dimension compatibility
+                    if input_val.shape == x_new[j].shape:
+                        input_val = input_val + L[i, j] * x_new[j]
+                    else:
+                        # Handle dimension mismatch - this shouldn't happen
+                        # in a properly configured system
+                        logger.warning(f"Dimension mismatch at ({i},{j}): "
+                                     f"{input_val.shape} vs {x_new[j].shape}")
+            
+            # Apply appropriate proximal operator
+            if i < n:
+                # Objective proximal operator for sensor i
+                x_new[i] = self.prox_objective_gi(input_val, i, alpha)
+            else:
+                # PSD constraint proximal operator for sensor i-n
+                x_new[i] = self.prox_indicator_psd(input_val)
         
         return x_new
 
@@ -372,6 +347,11 @@ class MatrixParametrizedProximalSplitting:
         # Initialize lifted variable structure
         self.lifted_structure = LiftedVariableStructure(
             config.n_sensors, config.dimension
+        )
+        
+        # Initialize vectorizer for proper matrix operations
+        self.vectorizer = MatrixVectorizer(
+            config.n_sensors, config.dimension, self.neighborhoods
         )
         
         # Initialize proximal evaluator
@@ -459,7 +439,7 @@ class MatrixParametrizedProximalSplitting:
     
     def run_iteration(self, k: int) -> Dict[str, float]:
         """
-        Run one iteration of Algorithm 1
+        Run one iteration of Algorithm 1 from the paper
         
         Args:
             k: Iteration number
@@ -467,38 +447,45 @@ class MatrixParametrizedProximalSplitting:
         Returns:
             Dictionary with iteration statistics
         """
-        # Step 1: Proximal evaluations (equation 9a-9c)
-        self.x = self.prox_evaluator.evaluate_parallel(
+        # Step 1: Sequential proximal evaluations with L matrix (equations 9a-9c)
+        # This implements the key sequential dependency structure
+        self.x = self.prox_evaluator.evaluate_sequential(
             self.x, self.v, self.L, k
         )
         
-        # Step 2: Consensus update (equation 9d)
-        # v^(k+1) = v^k - γWx^k
-        # For matrix variables with different dimensions, we handle consensus differently
+        # Step 2: Consensus update (equation 9d): v^(k+1) = v^k - γWx^k
         gamma = self.config.gamma
+        p = 2 * self.config.n_sensors
         n = self.config.n_sensors
         
-        if self.config.use_2block:
-            # For 2-block design, consensus is between corresponding blocks
-            # Update objective components
-            for i in range(n):
-                # Average with corresponding PSD component (same sensor)
-                if self.x[i].shape == self.x[n + i].shape:
-                    consensus_avg = (self.x[i] + self.x[n + i]) / 2.0
-                    self.v[i] = self.v[i] - gamma * (self.v[i] - consensus_avg)
-                    self.v[n + i] = self.v[n + i] - gamma * (self.v[n + i] - consensus_avg)
-                else:
-                    # If dimensions differ, skip consensus for this iteration
-                    pass
-        else:
-            # Simple consensus update for non-2block case
-            for i in range(len(self.v)):
-                update = np.zeros_like(self.v[i])
-                weight = 1.0 / len(self.x)
-                for j in range(len(self.x)):
-                    if self.x[j].shape == self.v[i].shape:
-                        update += weight * self.x[j]
-                self.v[i] = self.v[i] - gamma * (self.v[i] - update)
+        # For the 2-block design with varying matrix dimensions,
+        # the W matrix operates on the lifted variables at a structural level
+        # rather than element-wise. The consensus is achieved through
+        # coupling between the objective and constraint blocks.
+        
+        v_new = [None] * p
+        
+        for i in range(p):
+            # Initialize with current v_i
+            v_new[i] = self.v[i].copy()
+            
+            # Apply W matrix coupling
+            for j in range(p):
+                if self.W[i, j] != 0:
+                    # Check dimension compatibility
+                    sensor_i = i % n
+                    sensor_j = j % n
+                    
+                    # Only apply coupling between compatible dimensions
+                    # In 2-block design, coupling is primarily between
+                    # objective (i < n) and constraint (i >= n) blocks
+                    # for the same sensor
+                    if (sensor_i == sensor_j and 
+                        self.x[j].shape == v_new[i].shape):
+                        v_new[i] = v_new[i] - gamma * self.W[i, j] * self.x[j]
+        
+        # Update v with new values
+        self.v = v_new
         
         # Extract current position and Y estimates
         self._extract_estimates()
