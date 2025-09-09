@@ -76,42 +76,52 @@ class MatrixVectorizer:
     
     def vectorize_matrix(self, S: np.ndarray, sensor_idx: int) -> np.ndarray:
         """
-        Vectorize a single matrix S^i
+        Vectorize a single matrix S^i with proper sqrt(2) scaling for off-diagonals
         
         Args:
             S: Matrix to vectorize
             sensor_idx: Sensor index
             
         Returns:
-            Vectorized representation
+            Vectorized representation with D_i weighting
         """
         indices = self.vec_indices[sensor_idx]
         vec = np.zeros(self.vector_dims[sensor_idx])
         
         for k, (i, j) in enumerate(indices):
-            vec[k] = S[i, j]
+            if i == j:
+                # Diagonal entries: store as-is
+                vec[k] = S[i, j]
+            else:
+                # Off-diagonal entries: multiply by sqrt(2)
+                vec[k] = np.sqrt(2) * S[i, j]
         
         return vec
     
     def devectorize_matrix(self, vec: np.ndarray, sensor_idx: int) -> np.ndarray:
         """
-        Reconstruct matrix from vectorized form
+        Reconstruct matrix from vectorized form with proper sqrt(2) scaling
         
         Args:
-            vec: Vectorized representation
+            vec: Vectorized representation with D_i weighting
             sensor_idx: Sensor index
             
         Returns:
-            Reconstructed matrix
+            Reconstructed symmetric matrix
         """
         mat_dim = self.matrix_dims[sensor_idx]
         S = np.zeros((mat_dim, mat_dim))
         indices = self.vec_indices[sensor_idx]
         
         for k, (i, j) in enumerate(indices):
-            S[i, j] = vec[k]
-            if i != j:
-                S[j, i] = vec[k]  # Maintain symmetry
+            if i == j:
+                # Diagonal entries: store as-is
+                S[i, j] = vec[k]
+            else:
+                # Off-diagonal entries: divide by sqrt(2) and symmetrize
+                val = vec[k] / np.sqrt(2)
+                S[i, j] = val
+                S[j, i] = val  # Maintain symmetry
         
         return S
     

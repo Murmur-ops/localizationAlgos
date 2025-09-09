@@ -19,7 +19,7 @@ class ProximalADMMSolver:
     
     def __init__(self, rho: float = 1.0, max_iterations: int = 100,
                  tolerance: float = 1e-6, warm_start: bool = True,
-                 adaptive_penalty: bool = True):
+                 adaptive_penalty: bool = False):  # Disable adaptive by default for stability
         """
         Initialize ADMM solver
         
@@ -190,15 +190,20 @@ class ProximalADMMSolver:
         else:
             L_chol = self.cholesky_cache[cache_key]
         
-        # Initialize ADMM variables
+        # Initialize ADMM variables with warm-starting
         # Check if warm start variables have correct dimensions
         if (self.warm_start and self.lambda_prev is not None and 
             len(self.lambda_prev) == matrices['n_constraints']):
-            lambda_admm = self.lambda_prev
-            y = self.y_prev
+            lambda_admm = self.lambda_prev.copy()
+            y = self.y_prev.copy()
+            logger.debug(f"Warm-starting ADMM for sensor {sensor_idx} "
+                        f"(||lambda||={np.linalg.norm(lambda_admm):.3f})")
         else:
             lambda_admm = np.zeros(matrices['n_constraints'])
             y = np.zeros(matrices['n_constraints'])
+            if self.warm_start and self.lambda_prev is not None:
+                logger.debug(f"Warm-start dimension mismatch for sensor {sensor_idx}: "
+                           f"expected {matrices['n_constraints']}, got {len(self.lambda_prev)}")
         
         w = w_prev.copy()
         
@@ -220,6 +225,8 @@ class ProximalADMMSolver:
             dual_residual = np.linalg.norm(lambda_new - lambda_admm)
             
             if primal_residual < self.tolerance and dual_residual < self.tolerance:
+                logger.debug(f"ADMM converged at iteration {admm_iter+1} "
+                           f"(primal={primal_residual:.2e}, dual={dual_residual:.2e})")
                 break
             
             # Adaptive penalty update (Boyd et al.)
@@ -237,8 +244,10 @@ class ProximalADMMSolver:
         
         # Store for warm start
         if self.warm_start:
-            self.lambda_prev = lambda_admm
-            self.y_prev = y
+            self.lambda_prev = lambda_admm.copy()
+            self.y_prev = y.copy()
+            logger.debug(f"Stored warm-start for sensor {sensor_idx} "
+                        f"(iterations={admm_iter+1})")
         
         # Extract updated variables
         X_new = X_prev.copy()
