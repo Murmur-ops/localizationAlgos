@@ -143,7 +143,11 @@ class ProximalADMMSolver:
                 c[j_idx] = distances_sensors[j]**2
         for k_idx, k in enumerate(anchors):
             if k in distances_anchors:
-                c[len(neighbors) + k_idx] = distances_anchors[k]**2 - np.dot(anchor_positions[k], anchor_positions[k])
+                # Make sure anchor index is valid
+                if k < len(anchor_positions):
+                    c[len(neighbors) + k_idx] = distances_anchors[k]**2 - np.dot(anchor_positions[k], anchor_positions[k])
+                else:
+                    c[len(neighbors) + k_idx] = distances_anchors[k]**2
         
         # ADMM iterations
         K = matrices['K']
@@ -187,7 +191,9 @@ class ProximalADMMSolver:
             L_chol = self.cholesky_cache[cache_key]
         
         # Initialize ADMM variables
-        if self.warm_start and self.lambda_prev is not None:
+        # Check if warm start variables have correct dimensions
+        if (self.warm_start and self.lambda_prev is not None and 
+            len(self.lambda_prev) == matrices['n_constraints']):
             lambda_admm = self.lambda_prev
             y = self.y_prev
         else:
