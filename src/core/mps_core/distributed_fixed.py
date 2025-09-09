@@ -87,29 +87,33 @@ class DistributedMPSFixed:
             # Generate complete network on rank 0
             np.random.seed(self.config.seed)
             
-            # True positions
+            # True positions (with scale)
+            scale = self.config.scale if hasattr(self.config, 'scale') else 50.0
             true_positions = {}
             for i in range(n):
-                true_positions[i] = np.random.uniform(0, 1, d)
+                true_positions[i] = np.random.uniform(0, scale, d)
             
-            # Anchors
+            # Anchors (with scale)
             if self.config.n_anchors > 0 and d == 2:
+                # Place anchors at corners for 2D (scaled)
                 anchor_positions = np.array([
-                    [0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]
+                    [0.1*scale, 0.1*scale], [0.9*scale, 0.1*scale], 
+                    [0.9*scale, 0.9*scale], [0.1*scale, 0.9*scale]
                 ])
                 for i in range(4, self.config.n_anchors):
                     anchor_positions = np.vstack([
                         anchor_positions,
-                        np.random.uniform(0.2, 0.8, d)
+                        np.random.uniform(0.2*scale, 0.8*scale, d)
                     ])
                 anchor_positions = anchor_positions[:self.config.n_anchors]
             else:
-                anchor_positions = np.random.uniform(0, 1, (self.config.n_anchors, d))
+                anchor_positions = np.random.uniform(0, scale, (self.config.n_anchors, d))
             
-            # Adjacency matrix
+            # Adjacency matrix (with scaled communication range)
+            comm_range = self.config.communication_range * scale
             adjacency = MatrixOperations.build_adjacency(
                 true_positions,
-                self.config.communication_range
+                comm_range
             )
             
             # Distance measurements
@@ -129,7 +133,7 @@ class DistributedMPSFixed:
                 all_anchor_distances[i] = {}
                 for k in range(self.config.n_anchors):
                     true_dist = np.linalg.norm(true_positions[i] - anchor_positions[k])
-                    if true_dist <= self.config.communication_range:
+                    if true_dist <= comm_range:
                         noise = self.config.noise_factor * np.random.randn()
                         noisy_dist = true_dist * (1 + noise)
                         all_anchor_distances[i][k] = max(0.01, noisy_dist)
@@ -182,7 +186,8 @@ class DistributedMPSFixed:
                 )
                 all_positions[sensor] += 0.05 * np.random.randn(d)
             else:
-                all_positions[sensor] = np.random.uniform(0, 1, d)
+                scale = self.config.scale if hasattr(self.config, 'scale') else 50.0
+                all_positions[sensor] = np.random.uniform(0, scale, d)
         
         # Gather all initial positions
         all_init_positions = self.comm.allgather(all_positions)
@@ -259,9 +264,10 @@ class DistributedMPSFixed:
             X_new[sensor] = position
             X_new[sensor + n] = position
             
-            # Box constraints
+            # Box constraints (scaled)
+            scale = self.config.scale if hasattr(self.config, 'scale') else 50.0
             X_new[sensor] = ProximalOperators.prox_box_constraint(
-                X_new[sensor], -0.5, 1.5
+                X_new[sensor], -0.1*scale, 1.1*scale
             )
             X_new[sensor + n] = X_new[sensor]
         

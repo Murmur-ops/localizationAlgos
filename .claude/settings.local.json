@@ -25,7 +25,8 @@
       "Read(/private/tmp/decentralized_test/clean_test/**)",
       "Read(/private/tmp/decentralized_test/fresh_test/**)",
       "Read(/private/tmp/decentralized_test/fresh_test/**)",
-      "Read(/private/tmp/decentralized_test/fresh_test/configs/examples/**)"
+      "Read(/private/tmp/decentralized_test/fresh_test/configs/examples/**)",
+      "Bash(timeout 5 mpirun -n 2 python scripts/run_distributed.py --config configs/distributed_large.yaml)"
     ],
     "deny": []
   }

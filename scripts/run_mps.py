@@ -45,6 +45,7 @@ def dict_to_config(config_dict: dict, enable_carrier_phase: bool = False) -> MPS
         n_sensors=config_dict['network']['n_sensors'],
         n_anchors=config_dict['network']['n_anchors'],
         communication_range=config_dict['network'].get('communication_range', 0.3),
+        scale=config_dict['network'].get('scale', 50.0),
         dimension=config_dict['network'].get('dimension', 2),
         noise_factor=config_dict.get('measurements', {}).get('noise_factor', 0.001 if carrier_phase_config else 0.05),
         seed=config_dict.get('measurements', {}).get('seed', 42),

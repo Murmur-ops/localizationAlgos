@@ -39,7 +39,8 @@ class MPSConfig:
     """Configuration for MPS algorithm"""
     n_sensors: int = 30
     n_anchors: int = 6
-    communication_range: float = 0.3
+    communication_range: float = 0.3  # As fraction of scale
+    scale: float = 50.0  # Physical scale in meters
     noise_factor: float = 0.05
     gamma: float = 0.99
     alpha: float = 1.0
@@ -93,12 +94,15 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         d = self.config.dimension
         
-        # Generate random true positions
+        # Store scale for later conversion but work in normalized space
+        self.scale = self.config.scale if hasattr(self.config, 'scale') else 50.0
+        
+        # Generate random true positions in normalized 0-1 space
         self.true_positions = {}
         for i in range(n):
             self.true_positions[i] = np.random.uniform(0, 1, d)
         
-        # Generate anchor positions (well-distributed)
+        # Generate anchor positions (well-distributed) in normalized space
         if self.config.n_anchors > 0:
             if d == 2 and self.config.n_anchors >= 4:
                 # Place anchors at corners for 2D
@@ -115,7 +119,7 @@ class MPSAlgorithm:
             else:
                 self.anchor_positions = np.random.uniform(0, 1, (self.config.n_anchors, d))
         
-        # Build adjacency matrix
+        # Build adjacency matrix (communication range as fraction of normalized space)
         self.adjacency = MatrixOperations.build_adjacency(
             self.true_positions, 
             self.config.communication_range
@@ -172,6 +176,10 @@ class MPSAlgorithm:
         phase_noise_rad = cp_config.phase_noise_milliradians / 1000
         coarse_accuracy_m = cp_config.coarse_time_accuracy_ns * 1e-9 * 299792458 / 2
         
+        # Get scaled communication range
+        scale = self.config.scale if hasattr(self.config, 'scale') else 50.0
+        comm_range = self.config.communication_range * scale
+        
         # Sensor-to-sensor measurements with carrier phase
         for i in range(n):
             for j in range(i+1, n):
@@ -198,7 +206,7 @@ class MPSAlgorithm:
                     # Combined measurement: coarse (unambiguous) + fine (precise)
                     measured_dist = n_wavelengths * wavelength + fine_offset
                     
-                    self.distance_measurements[(i, j)] = max(0.001, measured_dist)
+                    self.distance_measurements[(i, j)] = max(0.00001, measured_dist)  # Min in normalized
                     self.distance_measurements[(j, i)] = self.distance_measurements[(i, j)]
         
         # Sensor-to-anchor measurements with carrier phase
@@ -222,7 +230,7 @@ class MPSAlgorithm:
                         # Fine phase for sub-mm precision
                         fine_offset = (wrapped_phase * wavelength) / (2 * np.pi)
                         measured_dist = n_wavelengths * wavelength + fine_offset
-                        self.anchor_distances[i][k] = max(0.001, measured_dist)
+                        self.anchor_distances[i][k] = max(0.00001, measured_dist)  # Min in normalized
     
     def initialize_state(self) -> MPSState:
         """Initialize algorithm state"""
@@ -238,7 +246,7 @@ class MPSAlgorithm:
                 positions[i] = np.mean(self.anchor_positions[anchor_ids], axis=0)
                 positions[i] += 0.1 * np.random.randn(d)  # Small perturbation
             else:
-                # Random initialization
+                # Random initialization in normalized space
                 positions[i] = np.random.uniform(0, 1, d)
         
         # Initialize algorithm variables (2-block structure)
@@ -271,6 +279,17 @@ class MPSAlgorithm:
         n = self.config.n_sensors
         X_new = state.X.copy()
         
+        # Adaptive alpha based on measurement type
+        if self.config.carrier_phase and self.config.carrier_phase.enable:
+            # For millimeter-accurate measurements in normalized space
+            # Need much smaller alpha since errors are ~0.00001 normalized units
+            sensor_alpha = self.config.alpha / 1000
+            anchor_alpha = self.config.alpha / 500
+        else:
+            # Standard noisy measurements
+            sensor_alpha = self.config.alpha / 10
+            anchor_alpha = self.config.alpha / 5
+        
         for i in range(n):
             # Apply distance constraints
             position = X_new[i]
@@ -281,7 +300,7 @@ class MPSAlgorithm:
                     measured_dist = self.distance_measurements[(i, j)]
                     position = ProximalOperators.prox_distance(
                         position, X_new[j], measured_dist, 
-                        alpha=self.config.alpha / 10
+                        alpha=sensor_alpha
                     )
             
             # Sensor-to-anchor constraints
@@ -289,15 +308,15 @@ class MPSAlgorithm:
                 for k, measured_dist in self.anchor_distances[i].items():
                     position = ProximalOperators.prox_distance(
                         position, self.anchor_positions[k], measured_dist,
-                        alpha=self.config.alpha / 5
+                        alpha=anchor_alpha
                     )
             
             # Update both blocks
             X_new[i] = position
             X_new[i + n] = position
             
-            # Box constraint to keep positions bounded
-            X_new[i] = ProximalOperators.prox_box_constraint(X_new[i], -0.5, 1.5)
+            # Box constraint to keep positions bounded in normalized space
+            X_new[i] = ProximalOperators.prox_box_constraint(X_new[i], -0.1, 1.1)
             X_new[i + n] = X_new[i]
         
         return X_new
@@ -325,8 +344,13 @@ class MPSAlgorithm:
         
         return np.sqrt(total_error / max(count, 1))
     
+    def denormalize_positions(self, positions: Dict[int, np.ndarray]) -> Dict[int, np.ndarray]:
+        """Convert normalized positions to physical scale"""
+        scale = self.scale if hasattr(self, 'scale') else 50.0
+        return {i: pos * scale for i, pos in positions.items()}
+    
     def compute_rmse(self, state: MPSState) -> float:
-        """Compute RMSE vs true positions"""
+        """Compute RMSE vs true positions (in normalized space)"""
         if self.true_positions is None:
             return 0.0
         
@@ -404,15 +428,26 @@ class MPSAlgorithm:
         
         # Final metrics
         final_objective = self.compute_objective(state)
-        final_rmse = self.compute_rmse(state) if self.true_positions else None
+        final_rmse_normalized = self.compute_rmse(state) if self.true_positions else None
+        
+        # Convert to physical units for output
+        scale = self.scale if hasattr(self, 'scale') else 50.0
+        final_rmse_physical = final_rmse_normalized * scale if final_rmse_normalized else None
+        final_positions_physical = self.denormalize_positions(state.positions)
+        
+        # Also denormalize the true and anchor positions for output
+        true_positions_physical = self.denormalize_positions(self.true_positions) if self.true_positions else None
+        anchor_positions_physical = self.anchor_positions * scale if self.anchor_positions is not None else None
         
         return {
             'converged': state.converged,
             'iterations': state.iteration,
-            'final_objective': final_objective,
-            'final_rmse': final_rmse,
-            'objective_history': objective_history,
-            'rmse_history': rmse_history,
-            'final_positions': dict(state.positions),
+            'final_objective': final_objective * scale,  # Scale objective too
+            'final_rmse': final_rmse_physical,  # In physical units (meters)
+            'objective_history': [obj * scale for obj in objective_history],
+            'rmse_history': [rmse * scale for rmse in rmse_history],
+            'final_positions': final_positions_physical,  # Physical coordinates
+            'true_positions': true_positions_physical,  # Physical coordinates
+            'anchor_positions': anchor_positions_physical,  # Physical coordinates
             'config': self.config
         }
