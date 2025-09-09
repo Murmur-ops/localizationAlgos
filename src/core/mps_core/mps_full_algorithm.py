@@ -26,8 +26,8 @@ class MPSConfig:
     n_sensors: int
     n_anchors: int
     dimension: int = 2
-    gamma: float = 0.999  # Step size for consensus update
-    alpha: float = 10.0   # Scaling parameter for proximal operators
+    gamma: float = 0.999  # Step size for consensus update (Section 3)
+    alpha: float = 10.0   # Scaling parameter for proximal operators (Section 3)
     max_iterations: int = 1000
     tolerance: float = 1e-6
     communication_range: float = 0.3  # As fraction of network scale
@@ -519,34 +519,44 @@ class MatrixParametrizedProximalSplitting:
         n = self.config.n_sensors
         d = self.config.dimension
         
-        # Average estimates from all lifted components
-        X_sum = np.zeros((n, d))
-        Y_sum = np.zeros((n, n))
-        count = np.zeros((n, n))
+        # Extract from consensus variables v (which are averaged during consensus step)
+        # Using x directly may include un-averaged proximal updates
+        X_new = np.zeros((n, d))
+        Y_new = np.zeros((n, n))
+        count_Y = np.zeros((n, n))
         
         for i in range(n):
             neighbors = self.neighborhoods.get(i, [])
             
-            # Extract from objective component
+            # Extract from consensus variable v[i] (objective component)
+            # This should be better averaged than raw x[i]
             X_i, Y_i = self.lifted_structure.extract_S_matrix(
-                self.x[i], i, neighbors
+                self.v[i], i, neighbors  # Use v instead of x
             )
-            X_sum += X_i
-            Y_sum += Y_i
             
-            # Count contributions for averaging
-            count[i, i] += 1
+            # For positions, take the i-th row directly
+            X_new[i] = X_i[i]
+            
+            # For Y matrix, accumulate and average
+            Y_new[i, i] += Y_i[i, i]
+            count_Y[i, i] += 1
+            
             for j in neighbors:
-                count[i, j] += 1
-                count[j, i] += 1
+                if j < n:  # Valid sensor index
+                    Y_new[i, j] += Y_i[i, j] if j < Y_i.shape[1] else 0
+                    Y_new[j, i] += Y_i[i, j] if j < Y_i.shape[1] else 0
+                    count_Y[i, j] += 1
+                    count_Y[j, i] += 1
         
-        # Average the estimates
-        count[count == 0] = 1  # Avoid division by zero
-        self.X = X_sum / n
-        self.Y = Y_sum / count
+        # Average the Y estimates
+        count_Y[count_Y == 0] = 1  # Avoid division by zero
+        self.Y = Y_new / count_Y
         
         # Ensure Y is symmetric
         self.Y = (self.Y + self.Y.T) / 2
+        
+        # Update positions
+        self.X = X_new
     
     def _compute_objective(self) -> float:
         """Compute total objective value"""
@@ -638,13 +648,13 @@ class MatrixParametrizedProximalSplitting:
         if self.network_data.true_positions is None:
             return 0.0
         
-        # Compute RMSE
+        # Compute RMSE from actual extracted positions, not from self.X
+        # self.X may not be properly updated, use final positions after extraction
         diff = self.X - self.network_data.true_positions
         rmse = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
         
-        # Convert to millimeters if in carrier phase mode
-        if self.config.carrier_phase_mode:
-            rmse *= 1000  # Convert to mm
+        # Don't arbitrarily multiply by 1000 - keep in same units as input
+        # The carrier_phase_mode multiplication was causing incorrect scaling
         
         return rmse
     

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import logging
 
 from .phase_measurement import PhaseMeasurement, CarrierPhaseConfig
+from .wide_lane import MelbourneWubbenaResolver, DualFrequencyConfig, WideLaneMeasurement
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +43,43 @@ class IntegerAmbiguityResolver:
         # History for temporal consistency
         self.resolution_history: Dict[Tuple[int, int], List[int]] = {}
         
+        # Initialize wide-lane resolver if dual-frequency enabled
+        self.wide_lane_resolver = None
+        if self.config.use_dual_frequency and self.config.frequency_l2_hz:
+            dual_config = DualFrequencyConfig(
+                frequency_l1_hz=self.config.frequency_hz,
+                frequency_l2_hz=self.config.frequency_l2_hz,
+                phase_noise_l1_rad=self.config.phase_noise_rad,
+                phase_noise_l2_rad=self.config.phase_noise_rad * 1.5,
+                snr_db=self.config.snr_db
+            )
+            self.wide_lane_resolver = MelbourneWubbenaResolver(dual_config)
+            logger.info(f"Dual-frequency mode enabled: WL wavelength = {dual_config.wavelength_wide_lane*100:.1f}cm")
+        
     def resolve_single_baseline(self, phase_rad: float,
                                coarse_distance: float,
-                               coarse_std: float) -> AmbiguityResolutionResult:
+                               coarse_std: float,
+                               phase_l2_rad: Optional[float] = None,
+                               code_l2: Optional[float] = None) -> AmbiguityResolutionResult:
         """
         Resolve ambiguity for single baseline using coarse distance
         
         Args:
-            phase_rad: Measured carrier phase [0, 2π)
+            phase_rad: Measured carrier phase [0, 2π) for L1
             coarse_distance: Coarse distance from TWTT (meters)
             coarse_std: Standard deviation of coarse measurement
+            phase_l2_rad: Optional L2 phase for dual-frequency
+            code_l2: Optional L2 code measurement
             
         Returns:
             Ambiguity resolution result
         """
+        # Use wide-lane if dual-frequency data available
+        if (self.wide_lane_resolver and phase_l2_rad is not None and 
+            code_l2 is not None):
+            return self._resolve_with_wide_lane(
+                phase_rad, phase_l2_rad, coarse_distance, code_l2, coarse_std
+            )
         # Fractional wavelength from phase
         fractional = phase_rad / (2 * np.pi)
         fine_distance = fractional * self.wavelength
@@ -96,6 +120,55 @@ class IntegerAmbiguityResolver:
             confidence=confidence,
             alternatives=alternatives[:5],  # Keep top 5
             method="single_baseline"
+        )
+    
+    def _resolve_with_wide_lane(self, phase_l1: float, phase_l2: float,
+                               code_l1: float, code_l2: float,
+                               coarse_std: float) -> AmbiguityResolutionResult:
+        """
+        Resolve using wide-lane combination for robust resolution
+        
+        Args:
+            phase_l1: L1 phase measurement (radians)
+            phase_l2: L2 phase measurement (radians)
+            code_l1: L1 code/TWTT measurement (meters)
+            code_l2: L2 code measurement (meters)
+            coarse_std: Coarse measurement standard deviation
+            
+        Returns:
+            Ambiguity resolution result with high confidence
+        """
+        # Resolve using Melbourne-Wübbena
+        wl_result = self.wide_lane_resolver.resolve_dual_frequency(
+            phase_l1, phase_l2, code_l1, code_l2
+        )
+        
+        # Validate solution
+        valid = self.wide_lane_resolver.validate_solution(wl_result)
+        
+        if not valid:
+            # Fall back to single frequency
+            logger.warning("Wide-lane validation failed, falling back to single frequency")
+            return self.resolve_single_baseline(phase_l1, code_l1, coarse_std)
+        
+        # Build alternatives list for compatibility
+        alternatives = [
+            (wl_result.l1_ambiguity, wl_result.refined_distance_m, wl_result.confidence)
+        ]
+        
+        # Add nearby alternatives with lower confidence
+        for delta in [-1, 1]:
+            alt_n = wl_result.l1_ambiguity + delta
+            alt_dist = (alt_n + phase_l1/(2*np.pi)) * self.wavelength
+            alt_conf = wl_result.confidence * 0.1  # Much lower confidence
+            alternatives.append((alt_n, alt_dist, alt_conf))
+        
+        return AmbiguityResolutionResult(
+            integer_cycles=wl_result.l1_ambiguity,
+            refined_distance_m=wl_result.refined_distance_m,
+            confidence=wl_result.confidence,
+            alternatives=alternatives,
+            method="wide_lane"
         )
     
     def resolve_with_geometry(self, measurements: List[PhaseMeasurement],

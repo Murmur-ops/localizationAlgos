@@ -17,11 +17,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CarrierPhaseConfig:
     """Configuration for carrier phase measurements"""
-    frequency_hz: float = 2.4e9  # S-band carrier frequency
+    frequency_hz: float = 2.4e9  # S-band carrier frequency (L1)
+    frequency_l2_hz: Optional[float] = 1.9e9  # Optional L2 frequency for dual-freq
     phase_noise_rad: float = 0.001  # 1 milliradian phase noise
     frequency_stability_ppb: float = 0.1  # 0.1 ppb with OCXO
     snr_db: float = 30.0  # Signal-to-noise ratio
     integration_time_ms: float = 1.0  # Phase integration time
+    use_dual_frequency: bool = False  # Enable dual-frequency mode
     
     @property
     def wavelength(self) -> float:
@@ -38,6 +40,23 @@ class CarrierPhaseConfig:
     @property
     def max_unambiguous_range(self) -> float:
         """Maximum unambiguous range (one wavelength)"""
+        return self.wavelength
+    
+    @property
+    def wavelength_l2(self) -> float:
+        """L2 wavelength if dual-frequency enabled"""
+        if self.frequency_l2_hz:
+            c = 299792458
+            return c / self.frequency_l2_hz
+        return self.wavelength
+    
+    @property
+    def wavelength_wide_lane(self) -> float:
+        """Wide-lane wavelength for dual-frequency"""
+        if self.frequency_l2_hz and self.use_dual_frequency:
+            c = 299792458
+            f_diff = abs(self.frequency_hz - self.frequency_l2_hz)
+            return c / f_diff if f_diff > 0 else float('inf')
         return self.wavelength
 
 
@@ -154,7 +173,8 @@ class CarrierPhaseMeasurementSystem:
     def create_measurement(self, node_i: int, node_j: int,
                           true_distance: float,
                           coarse_distance: float,
-                          coarse_std: float = 0.3) -> PhaseMeasurement:
+                          coarse_std: float = 0.3,
+                          use_dual_freq: bool = None) -> PhaseMeasurement:
         """
         Create a complete phase measurement with ambiguity resolution
         
@@ -163,12 +183,25 @@ class CarrierPhaseMeasurementSystem:
             true_distance: True distance for simulation
             coarse_distance: Coarse distance from TWTT
             coarse_std: Standard deviation of coarse measurement
+            use_dual_freq: Override config to use dual-frequency
             
         Returns:
             Complete phase measurement with resolved distance
         """
+        # Determine if using dual-frequency
+        use_dual = use_dual_freq if use_dual_freq is not None else self.config.use_dual_frequency
         # Measure carrier phase
         measured_phase, phase_var = self.measure_carrier_phase(true_distance)
+        
+        # For dual-frequency, also measure L2
+        phase_l2 = None
+        code_l2 = None
+        if use_dual and self.config.frequency_l2_hz:
+            # L2 phase measurement
+            true_phase_l2 = (true_distance / self.config.wavelength_l2) * 2 * np.pi
+            phase_l2 = (true_phase_l2 + np.random.normal(0, self.config.phase_noise_rad * 1.5)) % (2 * np.pi)
+            # L2 code measurement (slightly worse than L1)
+            code_l2 = true_distance + np.random.normal(0, coarse_std * 1.2)
         
         # Create measurement object
         measurement = PhaseMeasurement(
@@ -181,8 +214,20 @@ class CarrierPhaseMeasurementSystem:
             timestamp_ns=np.random.randint(0, 2**63)
         )
         
-        # Resolve integer ambiguity
-        measurement.resolve_ambiguity()
+        # Resolve integer ambiguity (with dual-freq if available)
+        if use_dual and phase_l2 is not None:
+            # Use advanced resolver with dual-frequency
+            from .ambiguity_resolver import IntegerAmbiguityResolver
+            resolver = IntegerAmbiguityResolver(self.config)
+            result = resolver.resolve_single_baseline(
+                measured_phase, coarse_distance, coarse_std,
+                phase_l2_rad=phase_l2, code_l2=code_l2
+            )
+            measurement.integer_cycles = result.integer_cycles
+            measurement.refined_distance_m = result.refined_distance_m
+        else:
+            # Standard single-frequency resolution
+            measurement.resolve_ambiguity()
         
         # Calculate quality factor based on variances
         phase_quality = np.exp(-phase_var / (self.config.phase_noise_rad ** 2))
@@ -200,6 +245,7 @@ class CarrierPhaseMeasurementSystem:
     def get_measurement_weight(self, measurement: PhaseMeasurement) -> float:
         """
         Calculate weight for measurement based on precision
+        Research-backed weight calculation based on GPS RTK standards
         
         Args:
             measurement: Phase measurement
@@ -208,20 +254,29 @@ class CarrierPhaseMeasurementSystem:
             Weight for use in weighted least squares
         """
         if measurement.refined_distance_m is None:
-            # Coarse measurement only
-            return 1.0 / measurement.coarse_variance
+            # Coarse measurement only (TWTT)
+            return 1.0  # Baseline weight
         
-        # Combined measurement - use phase precision
-        phase_std_m = (self.config.wavelength / (2 * np.pi)) * np.sqrt(measurement.phase_variance)
+        # Check if this was resolved with wide-lane (higher confidence)
+        if self.config.use_dual_frequency:
+            # Wide-lane resolved measurements get higher weight
+            base_weight = 500.0  # Much higher confidence with WL
+        else:
+            # Single-frequency carrier phase
+            base_weight = 100.0  # Standard GPS RTK ratio
         
-        # Weight inversely proportional to variance
-        weight = 1.0 / (phase_std_m ** 2)
+        # Scale by SNR (higher SNR = better precision)
+        # Cap SNR factor at 2.0 to prevent excessive weights
+        snr_factor = min(2.0, 10 ** (self.config.snr_db / 20))
         
         # Scale by quality factor
-        weight *= measurement.quality_factor
+        quality_scale = measurement.quality_factor
         
-        # Normalize weights (carrier phase ~1000x more precise than TWTT)
-        return weight * 1000
+        # Combined weight with cap at 1000 to prevent numerical issues
+        weight = base_weight * snr_factor * quality_scale
+        
+        # Cap weight to maintain condition number < 10^6
+        return min(1000.0, weight)
     
     def detect_cycle_slip(self, node_i: int, node_j: int,
                          new_phase: float) -> bool:

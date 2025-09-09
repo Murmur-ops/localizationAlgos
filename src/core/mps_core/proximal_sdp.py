@@ -18,7 +18,8 @@ class ProximalADMMSolver:
     """
     
     def __init__(self, rho: float = 1.0, max_iterations: int = 100,
-                 tolerance: float = 1e-6, warm_start: bool = True):
+                 tolerance: float = 1e-6, warm_start: bool = True,
+                 adaptive_penalty: bool = True):
         """
         Initialize ADMM solver
         
@@ -27,11 +28,14 @@ class ProximalADMMSolver:
             max_iterations: Maximum ADMM iterations
             tolerance: Convergence tolerance
             warm_start: Whether to use warm starting
+            adaptive_penalty: Whether to use adaptive penalty parameter
         """
         self.rho = rho
+        self.initial_rho = rho
         self.max_iterations = max_iterations
         self.tolerance = tolerance
         self.warm_start = warm_start
+        self.adaptive_penalty = adaptive_penalty
         
         # Warm start variables
         self.lambda_prev = None
@@ -39,6 +43,11 @@ class ProximalADMMSolver:
         
         # Cholesky factorization cache
         self.cholesky_cache = {}
+        
+        # Adaptive penalty parameters (Boyd et al.)
+        self.mu = 10.0  # Ratio threshold
+        self.tau_incr = 2.0  # Increase factor
+        self.tau_decr = 2.0  # Decrease factor
     
     def setup_problem_matrices(self, sensor_idx: int, neighbors: List[int],
                               anchors: List[int], dimension: int) -> Dict:
@@ -141,19 +150,39 @@ class ProximalADMMSolver:
         D = matrices['D']
         vec_dim = matrices['vec_dim']
         
-        # Compute Cholesky factorization (cache for efficiency)
-        cache_key = (sensor_idx, tuple(neighbors), tuple(anchors))
-        if cache_key not in self.cholesky_cache:
-            # Form matrix: rho * K^T K + D^T D
+        # Compute Cholesky factorization with preconditioning
+        cache_key = (sensor_idx, tuple(neighbors), tuple(anchors), self.rho)
+        if cache_key not in self.cholesky_cache or self.adaptive_penalty:
+            # Form matrix: rho * K^T K + D^T D / alpha
             A = self.rho * K.T @ K + D.T @ D / alpha
+            
+            # Add Tikhonov regularization for stability
+            trace_A = np.trace(A)
+            if trace_A > 0:
+                lambda_reg = 1e-6 * trace_A / vec_dim
+            else:
+                lambda_reg = 1e-6
+            A += lambda_reg * np.eye(vec_dim)
+            
+            # Check condition number
+            try:
+                cond = np.linalg.cond(A)
+                if cond > 1e6:
+                    # Apply diagonal preconditioning
+                    D_precond = np.diag(1.0 / np.sqrt(np.maximum(np.diag(A), 1e-10)))
+                    A = D_precond @ A @ D_precond
+                    logger.debug(f"Applied preconditioning, condition number: {cond:.2e} -> {np.linalg.cond(A):.2e}")
+            except:
+                pass
+            
             try:
                 L_chol = cholesky(A, lower=True)
-                self.cholesky_cache[cache_key] = L_chol
+                if not self.adaptive_penalty:
+                    self.cholesky_cache[cache_key] = L_chol
             except np.linalg.LinAlgError:
-                # Fall back to adding regularization
-                A += 1e-6 * np.eye(vec_dim)
+                # Fall back to stronger regularization
+                A += 1e-4 * np.eye(vec_dim)
                 L_chol = cholesky(A, lower=True)
-                self.cholesky_cache[cache_key] = L_chol
         else:
             L_chol = self.cholesky_cache[cache_key]
         
@@ -186,6 +215,17 @@ class ProximalADMMSolver:
             
             if primal_residual < self.tolerance and dual_residual < self.tolerance:
                 break
+            
+            # Adaptive penalty update (Boyd et al.)
+            if self.adaptive_penalty and admm_iter > 0 and admm_iter % 10 == 0:
+                if primal_residual > self.mu * dual_residual:
+                    self.rho = min(self.rho * self.tau_incr, 1e4)  # Cap at 1e4
+                    # Need to recompute Cholesky with new rho
+                    cache_key = None
+                elif dual_residual > self.mu * primal_residual:
+                    self.rho = max(self.rho / self.tau_decr, 1e-4)  # Floor at 1e-4
+                    # Need to recompute Cholesky with new rho
+                    cache_key = None
             
             lambda_admm = lambda_new
         
@@ -250,6 +290,36 @@ class ProximalADMMSolver:
         soft_τ(x) = sign(x) * max(|x| - τ, 0)
         """
         return np.sign(x) * np.maximum(np.abs(x) - threshold, 0)
+    
+    def _huber_prox(self, x: np.ndarray, delta: float, lambda_param: float) -> np.ndarray:
+        """
+        Proximal operator for Huber loss
+        Provides robustness to outliers
+        
+        Args:
+            x: Input vector
+            delta: Huber threshold
+            lambda_param: Proximal parameter
+            
+        Returns:
+            Proximal operator result
+        """
+        # For |x| <= delta + lambda: quadratic region
+        # For |x| > delta + lambda: linear region
+        abs_x = np.abs(x)
+        threshold = delta + lambda_param
+        
+        result = np.zeros_like(x)
+        
+        # Quadratic region
+        quad_mask = abs_x <= threshold
+        result[quad_mask] = x[quad_mask] / (1 + lambda_param)
+        
+        # Linear region
+        lin_mask = abs_x > threshold
+        result[lin_mask] = x[lin_mask] - lambda_param * np.sign(x[lin_mask])
+        
+        return result
 
 
 class ProximalOperatorsPSD:

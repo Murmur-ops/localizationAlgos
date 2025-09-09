@@ -21,6 +21,18 @@ from .phase_unwrapper import (
     PhaseUnwrapper
 )
 
+from .relative_positioning import (
+    NetworkAmbiguityResolver,
+    RelativeAmbiguity,
+    create_carrier_phase_weights
+)
+
+from .wide_lane import (
+    DualFrequencyConfig,
+    MelbourneWubbenaResolver,
+    WideLaneMeasurement
+)
+
 __all__ = [
     'CarrierPhaseConfig',
     'PhaseMeasurement',
@@ -28,5 +40,11 @@ __all__ = [
     'AmbiguityResolutionResult',
     'IntegerAmbiguityResolver',
     'PhaseState',
-    'PhaseUnwrapper'
+    'PhaseUnwrapper',
+    'NetworkAmbiguityResolver',
+    'RelativeAmbiguity',
+    'create_carrier_phase_weights',
+    'DualFrequencyConfig',
+    'MelbourneWubbenaResolver',
+    'WideLaneMeasurement'
 ]
