@@ -176,6 +176,9 @@ def generate_network_from_config(config: Dict[str, Any], rank: int) -> NetworkDa
     network_config = config['network']
     measurement_config = config['measurements']
     
+    # Use fixed seed for reproducible testing
+    seed = network_config.get('seed', 42)  # Default seed = 42 for consistency
+    
     # Create network on rank 0 and broadcast
     if rank == 0:
         network = create_network_data(
@@ -185,7 +188,8 @@ def generate_network_from_config(config: Dict[str, Any], rank: int) -> NetworkDa
             communication_range=network_config['communication_range'],
             measurement_noise=measurement_config['noise_factor'],
             carrier_phase=measurement_config.get('carrier_phase', False),
-            scale=network_config.get('scale', 1.0)
+            scale=network_config.get('scale', 1.0),
+            seed=seed
         )
     else:
         network = None

@@ -739,7 +739,8 @@ def create_network_data(n_sensors: int, n_anchors: int, dimension: int = 2,
                         communication_range: float = 0.3,
                         measurement_noise: float = 0.01,
                         carrier_phase: bool = False,
-                        scale: float = 1.0) -> NetworkData:
+                        scale: float = 1.0,
+                        seed: Optional[int] = None) -> NetworkData:
     """
     Create synthetic network data for testing
     
@@ -751,10 +752,15 @@ def create_network_data(n_sensors: int, n_anchors: int, dimension: int = 2,
         measurement_noise: Noise level for distance measurements
         carrier_phase: Whether to generate carrier phase measurements
         scale: Physical scale of deployment area in meters (positions internally stay in [0,1])
+        seed: Random seed for reproducible network generation
         
     Returns:
         NetworkData object with positions in unit square [0,1] but representing scale×scale meters
     """
+    # Set random seed for reproducibility
+    if seed is not None:
+        np.random.seed(seed)
+    
     # Generate true positions in unit square [0,1]
     # These represent a physical area of scale×scale meters
     true_positions = np.random.uniform(0, 1, (n_sensors, dimension))

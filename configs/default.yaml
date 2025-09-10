@@ -65,6 +65,11 @@ network:
   #   "grid": Regular grid placement (structured, artificial)
   #   "cluster": Clustered placement (models real deployments)
   topology: "random"
+  
+  # Random seed for reproducible network generation
+  # Set to null for random initialization
+  # Use same seed (e.g., 42) to compare algorithms on identical networks
+  seed: 42
 
 # ----------------------------------------------------------------------------
 # MEASUREMENT CONFIGURATION
@@ -99,11 +104,6 @@ measurements:
   # true: Adds carrier phase ambiguity resolution (complex, accurate)
   # false: Standard ranging only (simple, less accurate)
   carrier_phase: false
-  
-  # Random seed for reproducible experiments
-  # Set to null for random initialization
-  # Use same seed to compare algorithms on identical networks
-  seed: 42
 
 # ----------------------------------------------------------------------------
 # MPS ALGORITHM CONFIGURATION
