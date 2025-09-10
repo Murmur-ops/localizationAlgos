@@ -92,13 +92,13 @@ def plot_network_topology(network_data: Any, config: Dict[str, Any]) -> plt.Figu
     
     # Plot sensors
     ax.scatter(positions[:, 0], positions[:, 1], 
-              c='blue', s=100, alpha=0.8, edgecolors='darkblue',
+              c='blue', s=100, alpha=0.8, edgecolors='navy',
               linewidth=2, label=f'Sensors (n={n_sensors})', zorder=5)
     
     # Plot anchors
     if hasattr(network_data, 'anchor_positions'):
         ax.scatter(anchor_pos[:, 0], anchor_pos[:, 1], 
-                  c='red', s=200, alpha=0.9, marker='^', edgecolors='darkred',
+                  c='red', s=200, alpha=0.9, marker='^', edgecolors='maroon',
                   linewidth=2, label=f'Anchors (n={n_anchors})', zorder=6)
     
     # Add sensor labels
@@ -161,7 +161,7 @@ def plot_position_comparison(results: Dict[str, Any],
         # Left plot: Overlay of true and estimated
         ax1.scatter(true_pos[:, 0], true_pos[:, 1], 
                    c='blue', s=100, alpha=0.6, label='True', 
-                   edgecolors='darkblue', linewidth=2)
+                   edgecolors='navy', linewidth=2)
         ax1.scatter(est_pos[:, 0], est_pos[:, 1], 
                    c='red', s=80, alpha=0.6, label='Estimated',
                    marker='x', linewidth=2)
@@ -184,7 +184,7 @@ def plot_position_comparison(results: Dict[str, Any],
         # Right plot: Error distribution
         errors = np.linalg.norm(est_pos - true_pos, axis=1)
         
-        ax2.hist(errors, bins=20, alpha=0.7, color='purple', edgecolor='darkpurple')
+        ax2.hist(errors, bins=20, alpha=0.7, color='purple', edgecolor='purple')
         ax2.axvline(np.mean(errors), color='red', linestyle='--', 
                    linewidth=2, label=f'Mean: {np.mean(errors):.4f}')
         ax2.axvline(np.median(errors), color='green', linestyle='--', 

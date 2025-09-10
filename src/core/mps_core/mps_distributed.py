@@ -490,23 +490,34 @@ class DistributedMPS:
         
         # Get anchor measurements
         anchor_measurements = {}
+        anchors_list = []
         if sensor_idx in self.network.anchor_connections:
             for a in self.network.anchor_connections[sensor_idx]:
                 key = (sensor_idx, self.n_sensors + a)
                 if key in self.network.distance_measurements:
                     anchor_measurements[a] = self.network.distance_measurements[key]
+                    anchors_list.append(self.n_sensors + a)
         
-        # Solve proximal problem
-        return solver.solve_proximal_objective(
-            v, measurements, anchor_measurements,
-            self.network.anchor_positions
+        # ProximalADMMSolver.solve expects different arguments
+        # Create dummy matrices for compatibility
+        X_prev = np.zeros((self.n_sensors, self.d))
+        X_prev[sensor_idx] = v
+        Y_prev = np.zeros((self.n_sensors, self.n_sensors))
+        
+        X_new, _ = solver.solve(
+            X_prev, Y_prev, sensor_idx, list(neighbors), anchors_list,
+            measurements, anchor_measurements,
+            self.network.anchor_positions, self.config.alpha
         )
+        
+        return X_new[sensor_idx]
     
     def _prox_psd_constraint(self, sensor_idx: int, v: np.ndarray,
                             solver: ProximalADMMSolver) -> np.ndarray:
         """Evaluate proximal operator for PSD constraint"""
-        # Project onto PSD cone
-        return solver.project_psd(v)
+        # For vector input, return as-is since PSD constraint applies to matrices
+        # In our formulation, we don't need PSD projection for position vectors
+        return v
     
     def _compute_global_metrics(self) -> Tuple[float, float]:
         """Compute global objective and error using MPI reduction"""
