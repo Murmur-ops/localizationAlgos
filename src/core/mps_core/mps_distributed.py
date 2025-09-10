@@ -479,6 +479,10 @@ class DistributedMPS:
     def _prox_objective(self, sensor_idx: int, v: np.ndarray, 
                        solver: ProximalADMMSolver) -> np.ndarray:
         """Evaluate proximal operator for objective function"""
+        # v is a lifted matrix variable, we need to extract position
+        # For lifted variables, position is typically in the last column
+        # or we can use the matrix as-is for the SDP formulation
+        
         # Get measurement data
         neighbors = self.neighborhoods[sensor_idx]
         measurements = {}
@@ -498,19 +502,37 @@ class DistributedMPS:
                     anchor_measurements[a] = self.network.distance_measurements[key]
                     anchors_list.append(self.n_sensors + a)
         
-        # ProximalADMMSolver.solve expects different arguments
-        # Create dummy matrices for compatibility
+        # ProximalADMMSolver expects positions and Y matrices
+        # Extract position from lifted variable if it's a matrix
+        if v.ndim == 2 and v.shape[0] > self.d:
+            # v is a lifted matrix, extract position (last column or first d rows)
+            position = v[:self.d, -1] if v.shape[1] > self.d else v[:self.d, 0]
+        elif v.ndim == 1:
+            position = v
+        else:
+            # v is already in the right shape
+            position = v[:self.d] if v.shape[0] > self.d else v
+            
         X_prev = np.zeros((self.n_sensors, self.d))
-        X_prev[sensor_idx] = v
+        X_prev[sensor_idx] = position[:self.d]  # Ensure correct dimension
         Y_prev = np.zeros((self.n_sensors, self.n_sensors))
         
-        X_new, _ = solver.solve(
+        X_new, Y_new = solver.solve(
             X_prev, Y_prev, sensor_idx, list(neighbors), anchors_list,
             measurements, anchor_measurements,
             self.network.anchor_positions, self.config.alpha
         )
         
-        return X_new[sensor_idx]
+        # Return updated lifted variable maintaining the original structure
+        v_new = v.copy()
+        if v.ndim == 2 and v.shape[0] > self.d:
+            # Update position in lifted matrix
+            v_new[:self.d, -1] = X_new[sensor_idx]
+        else:
+            # Return just the position
+            v_new = X_new[sensor_idx]
+            
+        return v_new
     
     def _prox_psd_constraint(self, sensor_idx: int, v: np.ndarray,
                             solver: ProximalADMMSolver) -> np.ndarray:
