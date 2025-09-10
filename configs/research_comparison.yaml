@@ -1,0 +1,45 @@
+# Research Comparison Configuration
+# For comparing MPS vs ADMM algorithms
+
+network:
+  n_sensors: 30
+  n_anchors: 6
+  scale: 20.0
+  dimension: 2
+  communication_range: 0.4
+
+measurements:
+  measurement_type: "distance"
+  noise_factor: 0.05
+  outlier_probability: 0.02
+  seed: 42
+
+algorithm:
+  # Will be overridden when comparing
+  name: "comparison"
+  gamma: 0.99
+  alpha: 1.0
+  max_iterations: 500
+  tolerance: 1e-5
+
+comparison:
+  algorithms:
+    - name: "mps"
+      gamma: 0.99
+      alpha: 1.0
+    - name: "admm"
+      rho: 1.0
+      adaptive: true
+  
+  trials: 10
+  metrics:
+    - "rmse"
+    - "convergence_time"
+    - "iterations"
+    - "communication_rounds"
+
+output:
+  save_results: true
+  output_dir: "results/comparison/"
+  save_plots: true
+  verbose: true

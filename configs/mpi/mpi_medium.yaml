@@ -1,0 +1,48 @@
+# MPI Medium Configuration
+# ========================
+# Purpose: Standard MPI testing with moderate-sized networks
+# Expected runtime: 10-20 seconds
+# Recommended: mpirun -n 4-8 python scripts/run_mps_mpi.py --config configs/mpi/mpi_medium.yaml
+
+# Inherit from default
+extends: ../default.yaml
+
+network:
+  # Medium network size
+  n_sensors: 50
+  n_anchors: 8
+  scale: 10.0  # 10m x 10m area
+  communication_range: 0.3
+
+measurements:
+  # Moderate noise for realistic testing
+  noise_factor: 0.03
+  outlier_probability: 0.02
+
+algorithm:
+  # Standard MPI parameters
+  gamma: 0.998
+  alpha: 5.0
+  max_iterations: 500
+  tolerance: 1e-5
+
+admm:
+  # Balanced ADMM settings
+  iterations: 50
+  rho: 0.5
+
+mpi:
+  enable: true
+  async_communication: false  # Synchronous for stability
+  buffer_size_kb: 512
+  collective_operations: true
+  checkpoint_interval: 50
+
+performance:
+  track_metrics: true
+  log_interval: 25
+  save_checkpoints: true
+
+output:
+  output_dir: "results/mpi_medium/"
+  save_interval: 25

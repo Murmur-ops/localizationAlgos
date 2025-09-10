@@ -1,0 +1,50 @@
+# High Accuracy Configuration
+# For maximum localization accuracy (slower convergence)
+# Use when accuracy is more important than speed
+
+network:
+  n_sensors: 25
+  n_anchors: 8            # More anchors for better accuracy
+  communication_range: 0.4 # Denser network
+  dimension: 2
+  scale: 10.0
+  topology: "grid"        # Structured for better performance
+
+measurements:
+  noise_factor: 0.03      # Assume good quality measurements
+  seed: 42
+  measurement_type: "distance"
+  outlier_probability: 0.0 # No outliers for high accuracy
+
+algorithm:
+  name: "mps"
+  gamma: 0.999            # Very high for stability
+  alpha: 0.5              # Small steps for precision
+  max_iterations: 2000    # Allow full convergence
+  tolerance: 0.000001     # Very tight tolerance
+  patience: 200           # Don't stop early
+  adaptive: false         # Manual tuning for precision
+
+output:
+  save_results: true
+  output_dir: "results/high_accuracy/"
+  format: "mat"           # For MATLAB analysis
+  save_interval: 100
+  save_history: true
+
+validation:
+  compute_crlb: true      # Essential for accuracy assessment
+  compare_truth: true
+  confidence_intervals: true
+  confidence_level: 0.99  # 99% confidence
+  monte_carlo_runs: 10    # Multiple runs for statistics
+  metrics:
+    - "rmse"
+    - "mae"
+    - "max_error"
+    - "efficiency"
+
+experimental:
+  robust_estimator: "huber" # Robust to slight deviations
+  multi_resolution: true    # Coarse-to-fine approach
+  resolution_levels: 3

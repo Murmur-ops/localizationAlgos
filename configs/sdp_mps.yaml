@@ -1,0 +1,86 @@
+# Configuration for SDP-based Matrix-Parametrized Proximal Splitting
+# Full implementation from paper arXiv:2503.13403v1
+
+algorithm:
+  name: "sdp_mps"  # Use the new SDP-based implementation
+  type: "matrix_parametrized_proximal_splitting"
+  
+# Network configuration
+network:
+  n_sensors: 30
+  n_anchors: 6
+  dimension: 2
+  scale: 50.0  # Physical scale in meters
+  communication_range: 0.3  # As fraction of scale (15m for 50m scale)
+
+# SDP-specific parameters
+sdp:
+  gamma: 0.999  # Step size for consensus update (higher = faster convergence)
+  alpha: 10.0   # Scaling parameter for proximal operators
+  max_iterations: 1000
+  tolerance: 1e-6
+  early_stopping: true
+  early_stopping_window: 100
+  
+  # Matrix parameter generation
+  matrix_design: "sinkhorn-knopp"  # Options: sinkhorn-knopp, uniform, degree-normalized
+  block_design: "2-block"  # Options: 2-block, full
+  
+  # ADMM solver for proximal operators
+  admm:
+    rho: 1.0
+    max_iterations: 100
+    tolerance: 1e-6
+    warm_start: true
+
+# Carrier phase configuration for millimeter accuracy
+carrier_phase:
+  enable: true
+  frequency_ghz: 2.4  # S-band
+  phase_noise_milliradians: 1.0  # 1 mrad = ~2mm error at 2.4 GHz
+  frequency_stability_ppb: 0.1
+  coarse_time_accuracy_ns: 0.05  # 50 picoseconds for S-band
+  
+  # Adaptive scaling for carrier phase
+  sensor_alpha_scale: 0.001  # Scale alpha by 1/1000 for sensor measurements
+  anchor_alpha_scale: 0.002  # Scale alpha by 1/500 for anchor measurements
+
+# Measurement configuration
+measurements:
+  measurement_type: "carrier_phase"  # Use carrier phase for mm accuracy
+  noise_factor: 0.001  # Very low noise for carrier phase
+  seed: 42
+
+# Output configuration
+output:
+  save_results: true
+  output_dir: "results/sdp_mps/"
+  save_interval: 100  # Save intermediate results every N iterations
+  verbose: true
+  
+  # Metrics to track
+  metrics:
+    - "objective"
+    - "psd_violation"
+    - "consensus_error"
+    - "rmse"
+    - "position_error"
+    - "centrality_bias"
+
+# Comparison settings (for benchmarking)
+comparison:
+  run_simplified: true  # Also run simplified version for comparison
+  run_admm: false  # Also run decentralized ADMM
+  
+# Convergence criteria
+convergence:
+  check_psd: true  # Check PSD constraint satisfaction
+  check_consensus: true  # Check consensus error
+  psd_tolerance: 1e-4
+  consensus_tolerance: 1e-5
+  
+# Performance settings
+performance:
+  use_cholesky_cache: true  # Cache Cholesky factorizations
+  parallel_proximal: false  # Enable parallel proximal evaluations (requires MPI)
+  gpu_acceleration: false  # Use GPU for matrix operations (requires CUDA)

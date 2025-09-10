@@ -1,0 +1,38 @@
+# MPI Large Configuration
+# =======================
+# Purpose: Large-scale distributed testing
+# Expected runtime: 30-60 seconds
+# Recommended: mpirun -n 8-16 python scripts/run_mps_mpi.py --config configs/mpi/mpi_large.yaml
+
+# Inherit from distributed_large.yaml
+extends: ../distributed_large.yaml
+
+network:
+  # Large network
+  n_sensors: 100
+  n_anchors: 15
+  scale: 50.0  # 50m x 50m area
+  communication_range: 0.2  # Sparser connectivity
+
+algorithm:
+  # Conservative parameters for stability
+  gamma: 0.995
+  alpha: 2.0
+  max_iterations: 1000
+  
+mpi:
+  enable: true
+  async_communication: true  # Async for performance
+  buffer_size_kb: 2048  # Larger buffer for large network
+  collective_operations: true
+  checkpoint_interval: 100
+  load_balancing: "dynamic"  # Dynamic load balancing
+
+performance:
+  track_metrics: true
+  log_interval: 50
+  save_checkpoints: true
+
+output:
+  output_dir: "results/mpi_large/"
+  save_interval: 100

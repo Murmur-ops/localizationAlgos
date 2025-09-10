@@ -1,0 +1,49 @@
+# Configuration for Time Synchronization Emulation
+# This uses the computer's actual clock to emulate synchronization
+
+emulation:
+  name: "Python Time-based Synchronization"
+  description: "Emulates TWTT and consensus using computer clock with ~41ns resolution"
+  
+timing:
+  use_perf_counter: true  # Use time.perf_counter_ns() for best resolution
+  measure_resolution: true  # Test actual timer resolution
+  
+synchronization:
+  algorithm: "twtt"  # Options: twtt, consensus, frequency
+  reference_node: 0
+  num_exchanges: 10  # Number of TWTT exchanges per node pair
+  
+  twtt:
+    simulated_propagation_ns: 1000  # Simulated RF propagation delay
+    processing_delay_us: 1  # Processing time at each node
+    
+  frequency:
+    observation_window_s: 1.0
+    update_interval_s: 0.1
+    
+  consensus:
+    rounds: 50
+    mixing_parameter: 0.5
+
+network:
+  n_nodes: 10
+  topology: "full"  # Options: full, ring, star, random
+  
+measurement:
+  noise_model: "time_based"  # Uses synchronized time for ranging
+  original_noise_percent: 5.0  # Fallback noise model
+  
+performance:
+  measure_actual_resolution: true
+  benchmark_iterations: 1000
+  
+visualization:
+  plot_sync_accuracy: true
+  plot_timing_histogram: true
+  show_resolution_limits: true
+  
+output:
+  save_results: true
+  results_dir: "results/"
+  log_level: "INFO"

@@ -1,0 +1,37 @@
+# MPI Small Configuration
+# =======================
+# Purpose: Quick testing with MPI on small networks
+# Expected runtime: 2-5 seconds
+# Recommended: mpirun -n 2-4 python scripts/run_mps_mpi.py --config configs/mpi/mpi_small.yaml
+
+# Inherit from default configuration
+extends: ../default.yaml
+
+network:
+  # Small network for quick testing
+  n_sensors: 20
+  n_anchors: 4
+  communication_range: 0.4  # Higher connectivity for small network
+
+algorithm:
+  # Fewer iterations for quick testing
+  max_iterations: 200
+  
+  # More relaxed tolerance for speed
+  tolerance: 1e-4
+
+mpi:
+  # Enable MPI
+  enable: true
+  
+  # Small buffer for small network
+  buffer_size_kb: 256
+
+performance:
+  # More frequent logging for debugging
+  log_interval: 20
+
+output:
+  # MPI-specific output directory
+  output_dir: "results/mpi_small/"
+  verbose: true

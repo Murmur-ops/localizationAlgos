@@ -1,100 +1,85 @@
 #!/usr/bin/env python3
 """
-Simple test of MPI functionality
+Simple MPI test for the MPS algorithm
 """
 
-from mpi4py import MPI
+import sys
 import numpy as np
-import time
+from pathlib import Path
 
-def test_basic_mpi():
-    """Test basic MPI functionality"""
+# Add parent directory to path
+sys.path.append(str(Path(__file__).parent))
+
+# Test imports
+try:
+    from mpi4py import MPI
+    print(f"✓ MPI imported successfully")
+    
     comm = MPI.COMM_WORLD
     rank = comm.rank
     size = comm.size
+    print(f"  Process {rank}/{size}")
     
-    print(f"Process {rank} of {size} is running")
-    
-    # Test 1: Basic communication
-    if rank == 0:
-        data = {'numbers': [1, 2, 3, 4, 5], 'text': 'Hello from rank 0'}
-        print(f"Rank 0: Broadcasting data: {data}")
-    else:
-        data = None
-    
-    data = comm.bcast(data, root=0)
-    print(f"Rank {rank}: Received data: {data}")
-    
-    # Test 2: Scatter and gather
-    if rank == 0:
-        sendbuf = np.arange(size * 3, dtype='i').reshape(size, 3)
-        print(f"Rank 0: Scattering array:\n{sendbuf}")
-    else:
-        sendbuf = None
-    
-    recvbuf = np.empty(3, dtype='i')
-    comm.Scatter(sendbuf, recvbuf, root=0)
-    print(f"Rank {rank}: Received scatter: {recvbuf}")
-    
-    # Test 3: Reduce
-    local_sum = rank + 1
-    global_sum = comm.reduce(local_sum, op=MPI.SUM, root=0)
-    
-    if rank == 0:
-        print(f"Rank 0: Global sum = {global_sum}, expected = {sum(range(1, size+1))}")
-    
-    # Test 4: Barrier synchronization
-    comm.Barrier()
-    print(f"Rank {rank}: Passed barrier")
-    
-    # Test 5: Point-to-point communication
-    if size > 1:
-        if rank == 0:
-            msg = "Hello from rank 0!"
-            comm.send(msg, dest=1, tag=11)
-            print(f"Rank 0: Sent message to rank 1")
-        elif rank == 1:
-            msg = comm.recv(source=0, tag=11)
-            print(f"Rank 1: Received message: '{msg}'")
+except ImportError as e:
+    print(f"✗ MPI import failed: {e}")
+    sys.exit(1)
 
-def test_distributed_computation():
-    """Test a simple distributed computation"""
-    comm = MPI.COMM_WORLD
-    rank = comm.rank
-    size = comm.size
-    
-    # Distributed vector norm computation
-    n = 100
-    local_n = n // size
-    
-    # Each process computes part of a vector
-    np.random.seed(rank)
-    local_vector = np.random.randn(local_n)
-    
-    # Local computation
-    local_sum = np.sum(local_vector ** 2)
-    
-    # Global reduction
-    global_sum = comm.allreduce(local_sum, op=MPI.SUM)
-    global_norm = np.sqrt(global_sum)
-    
-    if rank == 0:
-        print(f"\nDistributed computation test:")
-        print(f"Vector size: {n}")
-        print(f"Processes: {size}")
-        print(f"Global norm: {global_norm:.6f}")
+try:
+    from src.core.mps_core.config_loader import ConfigLoader
+    print(f"✓ ConfigLoader imported (rank {rank})")
+except ImportError as e:
+    print(f"✗ ConfigLoader import failed: {e}")
+    sys.exit(1)
 
-if __name__ == "__main__":
-    print("="*50)
-    print("Testing MPI Installation")
-    print("="*50)
+try:
+    from src.core.mps_core.mps_distributed import DistributedMPS
+    print(f"✓ DistributedMPS imported (rank {rank})")
+except ImportError as e:
+    print(f"✗ DistributedMPS import failed: {e}")
+    sys.exit(1)
+
+try:
+    from src.core.mps_core.mps_full_algorithm import create_network_data
+    print(f"✓ Network utilities imported (rank {rank})")
+except ImportError as e:
+    print(f"✗ Network utilities import failed: {e}")
+    sys.exit(1)
+
+# Test basic functionality
+if rank == 0:
+    print("\nTesting basic MPS distributed functionality...")
     
-    test_basic_mpi()
-    test_distributed_computation()
+    # Create small test network
+    network = create_network_data(
+        n_sensors=10,
+        n_anchors=3,
+        dimension=2,
+        communication_range=0.5,
+        measurement_noise=0.01
+    )
+    print("✓ Network created successfully")
+else:
+    network = None
+
+# Broadcast network
+network = comm.bcast(network, root=0)
+
+if rank == 0:
+    print("✓ Network broadcast successful")
     
-    # Final synchronization
-    comm = MPI.COMM_WORLD
-    comm.Barrier()
+# Test config loading
+if rank == 0:
+    loader = ConfigLoader()
+    config = loader.load_config("configs/mpi/mpi_small.yaml")
+    print("✓ Configuration loaded successfully")
     
-    if comm.rank == 0:
-        print("\nAll tests completed successfully!")
+    # Quick validation
+    assert config['mpi']['enable'] == True
+    assert config['network']['n_sensors'] == 20
+    print("✓ Configuration validated")
+    
+comm.Barrier()
+
+if rank == 0:
+    print("\n✅ All MPI tests passed!")
+    print(f"MPI is working with {size} processes")

@@ -1,0 +1,62 @@
+# Large Network Configuration
+# ===========================
+# Purpose: Testing with very large sensor networks
+# Expected runtime: 60-120 seconds
+# Recommended: Use with MPI for better performance
+
+extends: default.yaml
+
+network:
+  # Very large network
+  n_sensors: 200
+  n_anchors: 20  # 10% anchors
+  scale: 100.0  # 100m x 100m area
+  dimension: 2
+  communication_range: 0.15  # Limited range for realism
+  topology: "cluster"  # Clustered topology
+
+measurements:
+  # Realistic conditions
+  noise_factor: 0.04
+  outlier_probability: 0.03
+  measurement_type: "distance"
+  seed: 99
+
+algorithm:
+  # Balanced for large networks
+  gamma: 0.997
+  alpha: 3.0
+  max_iterations: 1500
+  tolerance: 1e-5
+  
+  # Optimizations for large networks
+  early_stopping: true
+  early_stopping_window: 150
+  parallel_proximal: true  # Important for large networks
+  use_2block: true
+  adaptive_alpha: true  # Helps with convergence
+
+admm:
+  # Efficient ADMM for large problems
+  iterations: 50
+  tolerance: 1e-5
+  rho: 1.0
+  warm_start: true
+
+mpi:
+  # Strongly recommended for large networks
+  enable: false  # Set to true when using MPI
+  buffer_size_kb: 8192  # Large buffer
+  load_balancing: "dynamic"
+
+performance:
+  track_metrics: true
+  log_interval: 100  # Less frequent logging
+  save_checkpoints: true  # Important for long runs
+
+output:
+  output_dir: "results/large_network/"
+  save_interval: 200
+  save_positions: true
+  save_metrics: true
+  plot_results: false  # Plotting may be slow
