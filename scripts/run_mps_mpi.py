@@ -516,7 +516,25 @@ def main():
     
     # Generate plots if requested
     if args.plot:
-        plot_results(results, config, rank)
+        # Use new visualization module for separate windows
+        if rank == 0:
+            try:
+                from src.core.mps_core.visualization import generate_figures
+                logger.info("Generating visualization figures...")
+                
+                # Add network data to results if not present
+                results['network_data'] = network
+                
+                # Generate separate figure windows
+                output_prefix = config['output'].get('output_dir', 'results/') + 'mps_figures'
+                generate_figures(results, network, config, save_path=output_prefix)
+                logger.info("Figures generated successfully")
+            except ImportError:
+                logger.warning("Visualization module not available, using basic plotting")
+                plot_results(results, config, rank)
+            except Exception as e:
+                logger.error(f"Error generating figures: {e}")
+                plot_results(results, config, rank)
     
     # Finalize MPI
     if rank == 0:

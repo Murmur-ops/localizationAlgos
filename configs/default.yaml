@@ -292,6 +292,6 @@ output:
   save_metrics: true
   
   # Generate plots after completion
-  # true: Create convergence plots, position plots
+  # true: Create convergence plots, position plots in separate windows
   # false: No visualization (faster, headless operation)
-  plot_results: false
+  plot_results: true
