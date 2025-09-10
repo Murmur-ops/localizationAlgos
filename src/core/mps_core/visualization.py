@@ -189,14 +189,13 @@ def plot_position_comparison(results: Dict[str, Any],
         
         ax2.hist(errors, bins=20, alpha=0.7, color='purple', edgecolor='purple')
         ax2.axvline(np.mean(errors), color='red', linestyle='--', 
-                   linewidth=2, label=f'Mean: {np.mean(errors):.4f}')
+                   linewidth=2)
         ax2.axvline(np.median(errors), color='green', linestyle='--', 
-                   linewidth=2, label=f'Median: {np.median(errors):.4f}')
+                   linewidth=2)
         
         ax2.set_xlabel('Position Error (m)', fontsize=12)
         ax2.set_ylabel('Number of Sensors', fontsize=12)
         ax2.set_title('Error Distribution', fontsize=14, weight='bold')
-        ax2.legend()
         ax2.grid(True, alpha=0.3)
         
         # Add statistics text
