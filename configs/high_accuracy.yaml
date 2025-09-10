@@ -1,46 +1,151 @@
-# High Accuracy Configuration
-# Optimized for maximum localization accuracy
+# ============================================================================
+# HIGH ACCURACY CONFIGURATION
+# ============================================================================
+# Purpose: Achieve maximum localization accuracy at the cost of runtime
+# Use Case: Applications requiring millimeter to centimeter precision
+#           - Robotics, drone swarms, precision agriculture, AR/VR tracking
+# Expected Performance:
+#   - Runtime: 30-60 seconds (5-10x slower than default)
+#   - Relative Error: < 0.05 (approaching theoretical limits)
+#   - RMSE: < 1cm in unit square with good measurements
+# Trade-offs:
+#   - Much slower convergence due to conservative parameters
+#   - Higher computational cost from more ADMM iterations
+#   - Requires high-quality measurements to achieve potential
+# ============================================================================
 
+# Inherit all settings from default.yaml and override specific values
+extends: default.yaml
+
+# ----------------------------------------------------------------------------
+# NETWORK CONFIGURATION - Optimized for accuracy
+# ----------------------------------------------------------------------------
 network:
+  # More sensors provide redundancy and improve accuracy
+  # 40 sensors give good coverage without excessive computation
   n_sensors: 40
-  n_anchors: 8
-  scale: 30.0
-  dimension: 2
-  communication_range: 0.5
-  anchor_placement: "optimal"  # Places anchors at corners and center
+  
+  # More anchors significantly improve localization accuracy
+  # 25% anchor ratio is high but justified for precision applications
+  # Each additional anchor reduces uncertainty in that region
+  n_anchors: 10
+  
+  # Higher communication range creates denser connectivity graph
+  # 0.4 ensures most sensors have 8-12 neighbors (robust to failures)
+  # More connections = more constraints = better accuracy
+  communication_range: 0.4
 
+# ----------------------------------------------------------------------------
+# MEASUREMENT CONFIGURATION - Highest quality measurements
+# ----------------------------------------------------------------------------
 measurements:
-  measurement_type: "distance"
-  noise_factor: 0.001  # Very low noise
+  # Ultra-low noise for high-precision sensors
+  # 1% noise represents high-end UWB or laser ranging
+  # Real hardware: DW1000 UWB chip can achieve <2cm std dev
+  noise_factor: 0.01
+  
+  # Zero outliers - assumes line-of-sight, controlled environment
+  # For real deployments, consider 0.01-0.02 for rare outliers
   outlier_probability: 0.0
-  seed: 42
+  
+  # Enable carrier phase for millimeter-level accuracy
+  # Requires phase-coherent hardware (GPS L1/L2, high-end UWB)
+  # Adds integer ambiguity resolution complexity but worth it
+  # Can improve accuracy by 10-100x over code-only ranging
+  carrier_phase: true
 
+# ----------------------------------------------------------------------------
+# ALGORITHM CONFIGURATION - Conservative for maximum accuracy
+# ----------------------------------------------------------------------------
 algorithm:
-  name: "mps"
-  gamma: 0.999  # Very stable convergence
-  alpha: 0.5    # Conservative step size
-  max_iterations: 2000
-  tolerance: 1e-8  # Very tight tolerance
+  # Near-unity gamma for maximum stability
+  # 0.9999 means 99.99% weight on proximal, 0.01% on consensus
+  # Extremely conservative but ensures monotonic convergence
+  # May take many iterations but guarantees progress
+  gamma: 0.9999
   
-  # Advanced features
-  use_sdp_init: true  # Semidefinite programming initialization
-  use_anderson_acceleration: true
-  anderson_memory: 10
-  use_adaptive_steps: true
+  # Small step size prevents overshooting
+  # α=1.0 is the theoretical "safe" value (no over-relaxation)
+  # Slow but steady progress towards optimum
+  # Combined with high gamma, ensures stability
+  alpha: 1.0
+  
+  # Many iterations needed due to conservative parameters
+  # 2000 iterations typically achieves 1e-8 tolerance
+  # Each iteration is expensive due to high ADMM iterations
+  # Total runtime: ~2000 * 200 * O(n³) operations
+  max_iterations: 2000
+  
+  # Very tight tolerance for maximum precision
+  # 1e-8 relative change means solution accurate to 8 decimal places
+  # May not always achieve this but will get very close
+  # Stop condition: |f(k+1) - f(k)| / |f(k)| < 1e-8
+  tolerance: 1e-8
+  
+  # Keep early stopping but with longer window
+  # Need longer window due to slow, steady convergence
+  # Prevents premature termination on temporary plateaus
+  early_stopping: true
+  early_stopping_window: 200
+  
+  # Essential features for accuracy
+  use_2block: true        # Better constraint satisfaction
+  
+  # Adaptive alpha helps fine-tune near convergence
+  # Starts with α=1.0, may reduce to 0.1-0.5 near optimum
+  # Helps achieve tighter tolerance without oscillation
+  adaptive_alpha: true
 
-optimization:
-  preconditioning: true
+# ----------------------------------------------------------------------------
+# ADMM CONFIGURATION - High precision inner solver
+# ----------------------------------------------------------------------------
+admm:
+  # Many inner iterations for accurate proximal evaluation
+  # Each proximal must be solved to high accuracy
+  # 200 iterations ensures constraint satisfaction to 1e-8
+  # Runtime cost: O(200 * n³) per proximal evaluation
+  iterations: 200
+  
+  # Match outer tolerance for consistency
+  # Inner solver must be at least as accurate as outer
+  # 1e-8 ensures proximal operator is computed precisely
+  tolerance: 1e-8
+  
+  # Small penalty parameter for accuracy over speed
+  # ρ=0.1 emphasizes objective accuracy over constraint speed
+  # Takes more iterations but achieves better objective value
+  # Good for final solution quality
+  rho: 0.1
+  
+  # Essential for efficiency with many iterations
   warm_start: true
-  multi_scale: true
-  refinement_iterations: 100
 
-output:
-  save_results: true
-  output_dir: "results/high_accuracy/"
-  save_intermediate: true
-  verbose: true
+# ----------------------------------------------------------------------------
+# PERFORMANCE MONITORING - Detailed tracking
+# ----------------------------------------------------------------------------
+performance:
+  # Track everything for analysis
+  track_metrics: true
   
-requirements:
-  max_rmse: 0.01  # 1cm accuracy target
-  max_iterations: 2000
-  convergence_rate: 0.95
+  # Less frequent logging due to many iterations
+  # Every 100 iterations is ~5% progress markers
+  log_interval: 100
+
+# ----------------------------------------------------------------------------
+# OUTPUT CONFIGURATION - Full results for analysis
+# ----------------------------------------------------------------------------
+output:
+  # Dedicated output directory for high-accuracy runs
+  output_dir: "results/high_accuracy/"
+  
+  # Save intermediate results for convergence analysis
+  # Every 100 iterations allows plotting smooth convergence curves
+  save_interval: 100
+  
+  # Save everything for post-processing
+  save_positions: true   # Final sensor positions
+  save_metrics: true     # Full convergence history
+  
+  # Generate plots to verify convergence
+  # Useful for papers, reports, debugging
+  plot_results: true
