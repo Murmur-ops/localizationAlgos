@@ -135,6 +135,16 @@ class DistributedMPS:
         # Local copies of variables
         self.v_local = {}  # Dual variables
         self.x_local = {}  # Primal variables
+        self.x_local_prev = {}  # Previous x for momentum
+        
+        # Adaptive parameters
+        self.alpha_current = self.config.alpha
+        self.oscillation_counter = 0
+        self.improvement_counter = 0
+        
+        # Momentum parameters
+        self.momentum = 0.0  # Will be updated adaptively
+        self.momentum_beta = 0.9  # Momentum decay factor
         
         # Determine matrix dimensions based on neighborhoods
         self.matrix_dims = {}
@@ -151,6 +161,7 @@ class DistributedMPS:
             # Initialize with identity matrix
             self.v_local[i] = np.eye(dim)
             self.x_local[i] = np.eye(dim)
+            self.x_local_prev[i] = np.eye(dim)
         
         # Store neighborhoods for quick access
         self.neighborhoods = {}
@@ -227,9 +238,16 @@ class DistributedMPS:
         # Tracking
         objectives = []
         errors = []
+        smoothed_objectives = []  # Exponentially smoothed objectives
+        smoothed_errors = []  # Exponentially smoothed errors
         best_error = float('inf')
         best_positions = None
         convergence_counter = 0
+        
+        # Smoothing parameters
+        smoothing_factor = 0.8  # Weight for new value (1-smoothing = weight for history)
+        current_obj_smooth = None
+        current_err_smooth = None
         
         # Main iteration loop
         start_time = time.time()
@@ -256,16 +274,51 @@ class DistributedMPS:
                 objectives.append(obj)
                 errors.append(error)
                 
-                if self.rank == 0:
-                    self.logger.info(f"Iteration {k}: objective={obj:.6f}, error={error:.6f}")
+                # Apply exponential smoothing
+                if current_obj_smooth is None:
+                    current_obj_smooth = obj
+                    current_err_smooth = error
+                else:
+                    current_obj_smooth = smoothing_factor * obj + (1 - smoothing_factor) * current_obj_smooth
+                    current_err_smooth = smoothing_factor * error + (1 - smoothing_factor) * current_err_smooth
                 
-                # Check convergence
+                smoothed_objectives.append(current_obj_smooth)
+                smoothed_errors.append(current_err_smooth)
+                
+                if self.rank == 0:
+                    self.logger.info(f"Iteration {k}: obj={obj:.6f} (smooth={current_obj_smooth:.6f}), "
+                                   f"error={error:.6f} (smooth={current_err_smooth:.6f})")
+                
+                # Check convergence and adapt parameters
                 if error < best_error:
+                    improvement_ratio = (best_error - error) / (best_error + 1e-10)
                     best_error = error
                     best_positions = self._gather_positions()
                     convergence_counter = 0
+                    self.oscillation_counter = 0
+                    self.improvement_counter += 1
+                    
+                    # If improving, slightly increase alpha (but cap it)
+                    if self.config.adaptive_alpha and self.improvement_counter > 2:
+                        self.alpha_current = min(self.alpha_current * 1.05, self.config.alpha * 1.5)
+                        self.momentum = max(0, self.momentum - 0.1)  # Reduce momentum when improving
                 else:
                     convergence_counter += 1
+                    
+                    # Check for oscillation
+                    if k > 0 and len(errors) > 2:
+                        if errors[-1] > errors[-2]:  # Error increased
+                            self.oscillation_counter += 1
+                        else:
+                            self.oscillation_counter = max(0, self.oscillation_counter - 1)
+                    
+                    # Adapt parameters if oscillating
+                    if self.config.adaptive_alpha and self.oscillation_counter > 3:
+                        self.alpha_current *= 0.9  # Reduce step size
+                        self.momentum = min(0.5, self.momentum + 0.1)  # Increase momentum
+                        self.oscillation_counter = 0
+                        if self.rank == 0:
+                            self.logger.info(f"  Adapted: alpha={self.alpha_current:.4f}, momentum={self.momentum:.2f}")
                 
                 if convergence_counter > self.config.early_stopping_window:
                     if self.rank == 0:
@@ -293,10 +346,14 @@ class DistributedMPS:
             'final_error': errors[-1] if errors else None,
             'objectives': objectives,
             'errors': errors,
+            'smoothed_objectives': smoothed_objectives,
+            'smoothed_errors': smoothed_errors,
             'positions': final_positions if self.rank == 0 else None,
             'best_positions': best_positions if self.rank == 0 else None,
             'timing_stats': self.timing_stats,
-            'n_processes': self.size
+            'n_processes': self.size,
+            'final_alpha': self.alpha_current,
+            'final_momentum': self.momentum
         }
         
         if self.rank == 0:
@@ -341,14 +398,22 @@ class DistributedMPS:
                 sensor_idx = i % self.n_sensors
                 if i < self.n_sensors:
                     # Objective proximal (measurements)
-                    self.x_local[i] = self._prox_objective(
+                    x_new = self._prox_objective(
                         sensor_idx, v_tilde, solvers[i]
                     )
                 else:
                     # PSD constraint proximal
-                    self.x_local[i] = self._prox_psd_constraint(
+                    x_new = self._prox_psd_constraint(
                         sensor_idx, v_tilde, solvers[i]
                     )
+                
+                # Apply momentum if enabled
+                if self.momentum > 0 and i in self.x_local_prev:
+                    x_new = (1 - self.momentum) * x_new + self.momentum * self.x_local_prev[i]
+                
+                # Store previous and update current
+                self.x_local_prev[i] = self.x_local.get(i, x_new).copy()
+                self.x_local[i] = x_new
             
             # Synchronize after each sequential step if needed
             if self.config.async_communication:
@@ -401,7 +466,12 @@ class DistributedMPS:
                         x_j = remote_x.get(j)
                     
                     if x_j is not None and x_j.shape == v_new[i].shape:
-                        v_new[i] -= self.config.gamma * self.W[i, j] * x_j
+                        # Use adaptive gamma based on current alpha
+                        gamma_effective = self.config.gamma
+                        if self.config.adaptive_alpha:
+                            # Scale gamma with alpha changes
+                            gamma_effective *= (self.alpha_current / self.config.alpha)
+                        v_new[i] -= gamma_effective * self.W[i, j] * x_j
         
         # Update local v
         self.v_local = v_new

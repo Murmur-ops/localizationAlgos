@@ -239,9 +239,11 @@ def plot_convergence_curves(results: Dict[str, Any],
     """
     fig = plt.figure(figsize=(14, 6))
     
-    # Get data
-    objectives = results.get('objectives', [])
-    errors = results.get('errors', [])
+    # Get data - prefer smoothed values if available
+    objectives = results.get('smoothed_objectives', results.get('objectives', []))
+    errors = results.get('smoothed_errors', results.get('errors', []))
+    raw_objectives = results.get('objectives', [])
+    raw_errors = results.get('errors', [])
     
     if not objectives and not errors:
         ax = fig.add_subplot(111)
@@ -258,7 +260,13 @@ def plot_convergence_curves(results: Dict[str, Any],
     # Left plot: Objective function
     ax1 = fig.add_subplot(121)
     if objectives:
-        ax1.semilogy(iterations, objectives, 'b-', linewidth=2, label='Objective')
+        # Plot raw data if different from smoothed
+        if raw_objectives and len(raw_objectives) == len(objectives) and not np.array_equal(raw_objectives, objectives):
+            ax1.semilogy(iterations, raw_objectives, 'b-', alpha=0.3, linewidth=1, label='Raw')
+            ax1.semilogy(iterations, objectives, 'b-', linewidth=2, label='Smoothed')
+        else:
+            ax1.semilogy(iterations, objectives, 'b-', linewidth=2, label='Objective')
+        
         ax1.fill_between(iterations, objectives, alpha=0.3)
         ax1.set_xlabel('Iteration', fontsize=12)
         ax1.set_ylabel('Objective Value (log scale)', fontsize=12)
@@ -275,7 +283,13 @@ def plot_convergence_curves(results: Dict[str, Any],
     # Right plot: RMSE
     ax2 = fig.add_subplot(122)
     if errors:
-        ax2.semilogy(iterations, errors, 'r-', linewidth=2, label='RMSE')
+        # Plot raw data if different from smoothed
+        if raw_errors and len(raw_errors) == len(errors) and not np.array_equal(raw_errors, errors):
+            ax2.semilogy(iterations, raw_errors, 'r-', alpha=0.3, linewidth=1, label='Raw')
+            ax2.semilogy(iterations, errors, 'r-', linewidth=2, label='Smoothed')
+        else:
+            ax2.semilogy(iterations, errors, 'r-', linewidth=2, label='RMSE')
+        
         ax2.fill_between(iterations, errors, alpha=0.3, color='red')
         ax2.set_xlabel('Iteration', fontsize=12)
         ax2.set_ylabel('RMSE (log scale)', fontsize=12)

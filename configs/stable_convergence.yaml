@@ -1,0 +1,61 @@
+# ============================================================================
+# STABLE CONVERGENCE CONFIGURATION
+# ============================================================================
+# Purpose: Achieve smooth, stable convergence without oscillations
+# Strategy: Conservative parameters with adaptive adjustments
+# 
+# Key differences from default:
+#   - Lower gamma (0.95 vs 0.999) for better balance
+#   - Lower alpha (2.0 vs 10.0) to prevent overshooting
+#   - Adaptive alpha enabled for automatic tuning
+#   - Momentum for smoothing updates
+# ============================================================================
+
+extends: default.yaml
+
+# ----------------------------------------------------------------------------
+# ALGORITHM CONFIGURATION - Tuned for stability
+# ----------------------------------------------------------------------------
+algorithm:
+  # Moderate gamma for better proximal/consensus balance
+  # 0.98 = 98% proximal, 2% consensus (vs 99.9%/0.1%)
+  # This prevents the proximal from dominating completely while maintaining progress
+  gamma: 0.98
+  
+  # Moderate step size to prevent oscillations
+  # Start with α=5.0 and let adaptive tuning adjust
+  alpha: 5.0
+  
+  # Enable adaptive alpha adjustment
+  # Reduces alpha when oscillating, increases when stagnant
+  adaptive_alpha: true
+  
+  # Tighter tolerance for better convergence detection
+  tolerance: 1e-5
+  
+  # More frequent early stopping checks
+  early_stopping_window: 50
+
+# ----------------------------------------------------------------------------
+# ADMM CONFIGURATION - More accurate inner solver
+# ----------------------------------------------------------------------------
+admm:
+  # More iterations for better proximal accuracy
+  # Better inner accuracy can stabilize outer iterations
+  iterations: 150
+  
+  # Moderate penalty parameter
+  rho: 0.5
+  
+  # Ensure warm start is enabled
+  warm_start: true
+
+# ----------------------------------------------------------------------------
+# PERFORMANCE MONITORING - Track convergence closely
+# ----------------------------------------------------------------------------
+performance:
+  # Log every 5 iterations to see oscillations
+  log_interval: 5
+  
+  # Track all metrics for analysis
+  track_metrics: true
