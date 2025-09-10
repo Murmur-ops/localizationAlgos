@@ -32,6 +32,17 @@ class DistributedMPSConfig(MPSConfig):
     collective_operations: bool = True  # Use MPI collective operations
     checkpoint_interval: int = 100  # Save checkpoints every N iterations
     load_balancing: str = "block"  # "block" or "cyclic" distribution
+    
+    # Escape mechanism parameters
+    enable_perturbation: bool = False
+    perturbation_magnitude: float = 0.05
+    enable_annealing: bool = False
+    initial_temperature: float = 1.0
+    temperature_decay: float = 0.995
+    enable_parameter_shock: bool = False
+    shock_alpha_multiplier: float = 3.0
+    enable_restart: bool = False
+    restart_perturbation: float = 0.02
 
 
 class DistributedMPS:
@@ -145,6 +156,13 @@ class DistributedMPS:
         # Momentum parameters
         self.momentum = 0.0  # Will be updated adaptively
         self.momentum_beta = 0.9  # Momentum decay factor
+        
+        # Escape mechanisms
+        self.stuck_counter = 0  # Count iterations without improvement
+        self.escape_attempts = 0  # Number of escape attempts
+        self.best_error_history = []  # Track best error over time
+        self.temperature = self.config.initial_temperature if hasattr(self.config, 'initial_temperature') else 1.0
+        self.restart_threshold = 100  # Iterations before considering restart
         
         # Determine matrix dimensions based on neighborhoods
         self.matrix_dims = {}
@@ -265,6 +283,14 @@ class DistributedMPS:
             self._consensus_update_distributed()
             self.timing_stats['communication'] += time.time() - comm_start
             
+            # Increment stuck counter every iteration (not just when checking)
+            if k > 0 and len(errors) > 0:
+                # Simple check: if we haven't improved in recent history
+                if best_error < float('inf') and abs(errors[-1] - best_error) < 1e-6:
+                    self.stuck_counter += 1
+                else:
+                    self.stuck_counter = max(0, self.stuck_counter - 1)
+            
             # Step 3: Check convergence (every N iterations)
             if k % 10 == 0:
                 sync_start = time.time()
@@ -290,13 +316,26 @@ class DistributedMPS:
                                    f"error={error:.6f} (smooth={current_err_smooth:.6f})")
                 
                 # Check convergence and adapt parameters
-                if error < best_error:
+                # Simulated annealing: sometimes accept worse solutions
+                accept_worse = False
+                if error >= best_error and self.config.enable_annealing:
+                    # Calculate acceptance probability
+                    delta = error - best_error
+                    if self.temperature > 0:
+                        acceptance_prob = np.exp(-delta / self.temperature)
+                        if np.random.random() < acceptance_prob:
+                            accept_worse = True
+                            if self.rank == 0:
+                                self.logger.info(f"  ⚡ Accepted worse solution (prob={acceptance_prob:.3f}, T={self.temperature:.3f})")
+                
+                if error < best_error or accept_worse:
                     improvement_ratio = (best_error - error) / (best_error + 1e-10)
                     best_error = error
                     best_positions = self._gather_positions()
                     convergence_counter = 0
                     self.oscillation_counter = 0
                     self.improvement_counter += 1
+                    self.stuck_counter = 0  # Reset stuck counter on improvement
                     
                     # If improving, slightly increase alpha (but cap it)
                     if self.config.adaptive_alpha and self.improvement_counter > 2:
@@ -304,6 +343,7 @@ class DistributedMPS:
                         self.momentum = max(0, self.momentum - 0.1)  # Reduce momentum when improving
                 else:
                     convergence_counter += 1
+                    # stuck_counter is now incremented every iteration above
                     
                     # Check for oscillation
                     if k > 0 and len(errors) > 2:
@@ -319,6 +359,17 @@ class DistributedMPS:
                         self.oscillation_counter = 0
                         if self.rank == 0:
                             self.logger.info(f"  Adapted: alpha={self.alpha_current:.4f}, momentum={self.momentum:.2f}")
+                    
+                    # Check if stuck and trigger escape mechanisms
+                    if self.stuck_counter > 50 and k > 100:  # Wait before first escape
+                        self._trigger_escape_mechanism(k, error, best_error)
+                    elif self.stuck_counter > 30 and self.rank == 0 and k % 20 == 0:
+                        # Log stuck status
+                        self.logger.info(f"  ⏳ Stuck for {self.stuck_counter} iterations (trigger at 50)")
+                
+                # Decay temperature for simulated annealing
+                if self.config.enable_annealing:
+                    self.temperature *= self.config.temperature_decay
                 
                 if convergence_counter > self.config.early_stopping_window:
                     if self.rank == 0:
@@ -647,6 +698,78 @@ class DistributedMPS:
         global_error = np.sqrt(global_error / self.n_sensors)
         
         return global_obj, global_error
+    
+    def _trigger_escape_mechanism(self, iteration: int, current_error: float, best_error: float):
+        """Trigger escape mechanism when stuck in local minimum"""
+        self.escape_attempts += 1
+        
+        if self.rank == 0:
+            self.logger.info(f"  🚀 Escape attempt #{self.escape_attempts} at iteration {iteration}")
+            self.logger.info(f"     Current error: {current_error:.4f}, Best: {best_error:.4f}")
+        
+        # Strategy 1: Random Perturbation
+        if self.config.enable_perturbation:
+            self._apply_random_perturbation()
+        
+        # Strategy 2: Parameter Shock
+        if self.config.enable_parameter_shock:
+            self._apply_parameter_shock()
+        
+        # Strategy 3: Simulated Annealing Temperature Boost
+        if self.config.enable_annealing:
+            self.temperature = min(1.0, self.temperature * 2.0)  # Boost temperature
+            if self.rank == 0:
+                self.logger.info(f"     Temperature boosted to {self.temperature:.3f}")
+        
+        # Strategy 4: Smart Restart (if stuck for too long)
+        if self.stuck_counter > 150 and self.config.enable_restart:
+            self._smart_restart(best_error)
+        
+        # Reset stuck counter after escape attempt
+        self.stuck_counter = 0
+    
+    def _apply_random_perturbation(self):
+        """Add controlled noise to current solution"""
+        perturbation_magnitude = self.config.perturbation_magnitude
+        
+        for i in self.local_lifted_ids:
+            if i in self.x_local:
+                noise = np.random.randn(*self.x_local[i].shape) * perturbation_magnitude
+                self.x_local[i] += noise
+                self.v_local[i] += noise * 0.5  # Also perturb dual variables
+        
+        if self.rank == 0:
+            self.logger.info(f"     Applied {perturbation_magnitude*100:.1f}% random perturbation")
+    
+    def _apply_parameter_shock(self):
+        """Temporarily shock parameters to escape"""
+        shock_multiplier = self.config.shock_alpha_multiplier
+        self.alpha_current = min(self.alpha_current * shock_multiplier, self.config.alpha * 5.0)
+        self.momentum = 0.0  # Reset momentum for fresh start
+        
+        if self.rank == 0:
+            self.logger.info(f"     Alpha shocked to {self.alpha_current:.2f}")
+    
+    def _smart_restart(self, best_error: float):
+        """Restart from best known position with small perturbation"""
+        if self.rank == 0:
+            self.logger.info(f"     Smart restart from best position (error={best_error:.4f})")
+        
+        # Re-initialize with small perturbation
+        restart_perturbation = self.config.restart_perturbation
+        
+        for i in self.local_lifted_ids:
+            dim = self.matrix_dims[i]
+            # Start from identity with small random perturbation
+            self.v_local[i] = np.eye(dim) + np.random.randn(dim, dim) * restart_perturbation
+            self.x_local[i] = self.v_local[i].copy()
+            self.x_local_prev[i] = self.x_local[i].copy()
+        
+        # Reset parameters
+        self.alpha_current = self.config.alpha
+        self.momentum = 0.0
+        self.temperature = 1.0
+        self.escape_attempts = 0
     
     def _gather_positions(self) -> Optional[np.ndarray]:
         """Gather all sensor positions to rank 0"""
