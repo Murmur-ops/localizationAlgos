@@ -3,10 +3,20 @@
 # ============================================================================
 # Purpose: Base configuration for Matrix-Parametrized Proximal Splitting
 # Algorithm: Based on arXiv:2503.13403v1 (Semidefinite Relaxation Based Localization)
+# 
+# RMSE INTERPRETATION:
+#   - Algorithm reports NORMALIZED RMSE (dimensionless, as in papers)
+#   - Normalized RMSE = error as fraction of communication radius
+#   - Physical RMSE (meters) = normalized_rmse × communication_radius
+#   - Communication radius (meters) = communication_range × scale
+#   Example: With scale=100m and range=0.3:
+#     - Communication radius = 30 meters
+#     - Normalized RMSE of 0.15 = 15% of radius = 4.5 meters error
+#
 # Expected Performance:
 #   - Runtime: 5-10 seconds for 30 sensors
-#   - Relative Error: 0.10-0.20 (paper achieves 0.05-0.10)
-#   - RMSE: ~0.09 meters in unit square
+#   - Normalized RMSE: 0.10-0.20 (10-20% of communication radius)
+#   - Physical error depends on scale (see RMSE interpretation above)
 # ============================================================================
 
 # ----------------------------------------------------------------------------
@@ -32,7 +42,9 @@ network:
   
   # Maximum communication distance as fraction of network scale
   # Range: [0.1, 1.0] where 1.0 means all nodes can communicate
-  # 0.3 = nodes communicate if distance < 0.3 * scale
+  # 0.3 = nodes communicate if distance < 0.3 (in unit coordinates)
+  # Physical communication radius = communication_range × scale meters
+  # Example: range=0.3, scale=100m → physical radius = 30m
   # Lower values: sparser network, harder localization, more realistic
   # Higher values: denser network, easier localization, less realistic
   # Affects average node degree: ~(π * range² * n_sensors) / area
@@ -40,8 +52,11 @@ network:
   
   # Network deployment area size in meters
   # Defines the physical scale of the network
-  # All positions are generated in [0, scale] × [0, scale]
+  # Internally, positions are kept in [0,1] × [0,1] for numerical stability
+  # This scale parameter maps unit square to physical dimensions
   # Example: scale=100 means 100m × 100m deployment area
+  # RMSE interpretation: normalized_rmse × (communication_range × scale) = meters
+  # With scale=100, range=0.3: RMSE of 0.15 = 15% of 30m = 4.5m error
   scale: 1.0
   
   # Network topology generation method

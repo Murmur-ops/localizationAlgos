@@ -48,7 +48,8 @@ def demo_mps_with_visualization():
         dimension=config['network']['dimension'],
         communication_range=config['network']['communication_range'],
         measurement_noise=config['measurements']['noise_factor'],
-        carrier_phase=config['measurements'].get('carrier_phase', False)
+        carrier_phase=config['measurements'].get('carrier_phase', False),
+        scale=config['network'].get('scale', 1.0)
     )
     
     print(f"  ✓ Network created with {len(network.distance_measurements)} measurements")
@@ -84,8 +85,17 @@ def demo_mps_with_visualization():
         'final_error': errors[-1]
     }
     
+    # Calculate physical metrics
+    scale = config['network'].get('scale', 1.0)
+    comm_range = config['network'].get('communication_range', 0.3)
+    physical_comm_radius = comm_range * scale
+    rmse_normalized = results['best_error']
+    rmse_meters = rmse_normalized * physical_comm_radius
+    
     print(f"\n✓ Algorithm completed!")
-    print(f"  - Final RMSE: {results['best_error']:.4f}")
+    print(f"  - Normalized RMSE: {rmse_normalized:.4f} ({rmse_normalized*100:.1f}% of comm. radius)")
+    print(f"  - Physical RMSE: {rmse_meters:.4f} meters")
+    print(f"  - Communication radius: {physical_comm_radius:.1f} meters")
     print(f"  - Converged: {results['converged']}")
     
     # Generate visualization

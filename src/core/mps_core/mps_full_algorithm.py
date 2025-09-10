@@ -56,6 +56,7 @@ class NetworkData:
     true_positions: Optional[np.ndarray] = None  # For testing/validation
     carrier_phase_measurements: Optional[Dict] = None  # Phase measurements
     measurement_variance: float = 1e-6  # Measurement noise variance
+    scale: float = 1.0  # Physical scale in meters (positions are in [0,1] representing scale×scale meters)
 
 
 class LiftedVariableStructure:
@@ -737,7 +738,8 @@ class MatrixParametrizedProximalSplitting:
 def create_network_data(n_sensors: int, n_anchors: int, dimension: int = 2,
                         communication_range: float = 0.3,
                         measurement_noise: float = 0.01,
-                        carrier_phase: bool = False) -> NetworkData:
+                        carrier_phase: bool = False,
+                        scale: float = 1.0) -> NetworkData:
     """
     Create synthetic network data for testing
     
@@ -745,14 +747,16 @@ def create_network_data(n_sensors: int, n_anchors: int, dimension: int = 2,
         n_sensors: Number of sensors
         n_anchors: Number of anchors
         dimension: Spatial dimension
-        communication_range: Communication range as fraction of network
+        communication_range: Communication range as fraction of network size
         measurement_noise: Noise level for distance measurements
         carrier_phase: Whether to generate carrier phase measurements
+        scale: Physical scale of deployment area in meters (positions internally stay in [0,1])
         
     Returns:
-        NetworkData object
+        NetworkData object with positions in unit square [0,1] but representing scale×scale meters
     """
-    # Generate true positions
+    # Generate true positions in unit square [0,1]
+    # These represent a physical area of scale×scale meters
     true_positions = np.random.uniform(0, 1, (n_sensors, dimension))
     anchor_positions = np.random.uniform(0, 1, (n_anchors, dimension))
     
@@ -818,5 +822,6 @@ def create_network_data(n_sensors: int, n_anchors: int, dimension: int = 2,
         anchor_connections=anchor_connections,
         true_positions=true_positions,
         carrier_phase_measurements=carrier_phase_measurements,
-        measurement_variance=measurement_noise**2
+        measurement_variance=measurement_noise**2,
+        scale=scale
     )

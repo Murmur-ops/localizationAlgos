@@ -34,6 +34,12 @@ network:
   # 0.4 ensures most sensors have 8-12 neighbors (robust to failures)
   # More connections = more constraints = better accuracy
   communication_range: 0.4
+  
+  # Physical deployment scale
+  # Example: 50m × 50m area for precision agriculture or indoor tracking
+  # With range=0.4, physical comm. radius = 20 meters
+  # Target: < 1 meter positioning error (< 5% normalized RMSE)
+  scale: 50.0
 
 # ----------------------------------------------------------------------------
 # MEASUREMENT CONFIGURATION - Highest quality measurements

@@ -184,7 +184,8 @@ def generate_network_from_config(config: Dict[str, Any], rank: int) -> NetworkDa
             dimension=network_config['dimension'],
             communication_range=network_config['communication_range'],
             measurement_noise=measurement_config['noise_factor'],
-            carrier_phase=measurement_config.get('carrier_phase', False)
+            carrier_phase=measurement_config.get('carrier_phase', False),
+            scale=network_config.get('scale', 1.0)
         )
     else:
         network = None
@@ -501,11 +502,23 @@ def main():
     if rank == 0 and not args.quiet:
         print("\n" + "="*60)
         print("RESULTS SUMMARY")
+        # Calculate physical metrics
+        scale = config['network'].get('scale', 1.0)
+        comm_range = config['network'].get('communication_range', 0.3)
+        physical_comm_radius = comm_range * scale
+        best_normalized = results['best_error']
+        final_normalized = results['final_error']
+        best_meters = best_normalized * physical_comm_radius
+        final_meters = final_normalized * physical_comm_radius
+        
         print("="*60)
         print(f"Converged: {results['converged']}")
         print(f"Iterations: {results['iterations']}")
-        print(f"Best Error: {results['best_error']:.6f}")
-        print(f"Final Error: {results['final_error']:.6f}")
+        print(f"Best Normalized Error: {best_normalized:.6f} ({best_normalized*100:.2f}% of comm. radius)")
+        print(f"Best Physical Error: {best_meters:.4f} meters")
+        print(f"Final Normalized Error: {final_normalized:.6f} ({final_normalized*100:.2f}% of comm. radius)")
+        print(f"Final Physical Error: {final_meters:.4f} meters")
+        print(f"Communication Radius: {physical_comm_radius:.1f} meters")
         print(f"Total Time: {results['timing_stats']['total']:.2f}s")
         print("="*60)
     

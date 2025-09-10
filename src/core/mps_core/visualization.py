@@ -68,7 +68,9 @@ def plot_network_topology(network_data: Any, config: Dict[str, Any]) -> plt.Figu
     
     n_sensors = config['network']['n_sensors']
     n_anchors = config['network']['n_anchors']
-    positions = network_data.true_positions
+    scale = config['network'].get('scale', 1.0)
+    # Scale positions for display (internal are in [0,1])
+    positions = network_data.true_positions * scale
     
     # Plot communication links
     adjacency = network_data.adjacency_matrix
@@ -81,7 +83,7 @@ def plot_network_topology(network_data: Any, config: Dict[str, Any]) -> plt.Figu
     
     # Plot anchor-sensor connections
     if hasattr(network_data, 'anchor_positions'):
-        anchor_pos = network_data.anchor_positions
+        anchor_pos = network_data.anchor_positions * scale
         for i in range(n_sensors):
             for a in range(n_anchors):
                 key = (i, n_sensors + a)
@@ -143,7 +145,8 @@ def plot_position_comparison(results: Dict[str, Any],
     fig = plt.figure(figsize=(12, 10))
     
     n_sensors = config['network']['n_sensors']
-    true_pos = network_data.true_positions
+    scale = config['network'].get('scale', 1.0)
+    true_pos = network_data.true_positions * scale
     
     if 'best_positions' not in results or results['best_positions'] is None:
         # If no results yet, just show true positions
@@ -152,7 +155,7 @@ def plot_position_comparison(results: Dict[str, Any],
                   c='blue', s=100, alpha=0.8, label='True positions')
         ax.set_title('True Positions (No estimates available yet)', fontsize=14)
     else:
-        est_pos = results['best_positions'][:n_sensors]  # Only sensor positions
+        est_pos = results['best_positions'][:n_sensors] * scale  # Scale and get only sensor positions
         
         # Create two subplots
         ax1 = fig.add_subplot(121)
@@ -197,9 +200,25 @@ def plot_position_comparison(results: Dict[str, Any],
         ax2.grid(True, alpha=0.3)
         
         # Add statistics text
-        stats_text = (f"RMSE: {results.get('best_error', 0):.4f} m\n"
-                     f"Max Error: {np.max(errors):.4f} m\n"
-                     f"Min Error: {np.min(errors):.4f} m")
+        # Get scale and communication range from config
+        scale = config['network'].get('scale', 1.0)
+        comm_range = config['network'].get('communication_range', 0.3)
+        physical_comm_radius = comm_range * scale
+        
+        # Normalized RMSE (as in papers)
+        rmse_normalized = results.get('best_error', 0)
+        
+        # Physical RMSE in meters
+        rmse_meters = rmse_normalized * physical_comm_radius
+        
+        # Per-sensor errors in meters
+        errors_meters = errors * physical_comm_radius
+        
+        stats_text = (f"Normalized RMSE: {rmse_normalized:.4f} ({rmse_normalized*100:.1f}%)\n"
+                     f"Physical RMSE: {rmse_meters:.4f} m\n"
+                     f"Max Error: {np.max(errors_meters):.4f} m\n"
+                     f"Min Error: {np.min(errors_meters):.4f} m\n"
+                     f"Comm. Radius: {physical_comm_radius:.1f} m")
         ax2.text(0.98, 0.98, stats_text, transform=ax2.transAxes,
                 verticalalignment='top', horizontalalignment='right',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
