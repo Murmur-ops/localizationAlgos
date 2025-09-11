@@ -196,7 +196,8 @@ class RangingChannel:
     
     def generate_measurement(self, true_distance_m: float, 
                            prop_type: PropagationType = PropagationType.LOS,
-                           environment: str = "urban") -> Dict:
+                           environment: str = "urban",
+                           integration_time_s: float = 0.001) -> Dict:
         """Generate ranging measurement with all channel effects"""
         
         # Calculate SNR
@@ -223,11 +224,20 @@ class RangingChannel:
         snr_linear = 10**(snr_db / 10)
         beta_squared = (self.config.bandwidth_hz)**2 / 12
         
-        # Range variance in meters
+        # Range variance from SNR/bandwidth (Cramér-Rao bound)
         range_std_m = c / (2 * np.sqrt(beta_squared * snr_linear))
         
-        # Add measurement noise
-        noise_m = np.random.normal(0, range_std_m)
+        # Add Allan variance contribution from clock stability
+        # σ_y(τ) is the fractional frequency stability at integration time τ
+        # Typical oscillator: σ_y(1ms) ≈ 1e-11 for OCXO, 1e-9 for TCXO
+        allan_deviation = 1e-10  # Fractional frequency stability
+        clock_std_m = c * integration_time_s * allan_deviation
+        
+        # Total variance is sum of ranging and clock variances
+        total_std_m = np.sqrt(range_std_m**2 + clock_std_m**2)
+        
+        # Add measurement noise using total standard deviation
+        noise_m = np.random.normal(0, total_std_m)
         measured_distance_m += noise_m
         
         # Generate multipath channel response
@@ -241,7 +251,9 @@ class RangingChannel:
             'measured_distance_m': max(0, measured_distance_m),  # Can't be negative
             'snr_db': snr_db,
             'propagation_type': prop_type,
-            'measurement_std_m': range_std_m,
+            'measurement_std_m': total_std_m,  # Total standard deviation
+            'ranging_std_m': range_std_m,      # SNR/BW component
+            'clock_std_m': clock_std_m,        # Allan variance component
             'quality_score': quality_score,
             'channel_response': channel,
             'nlos_bias_m': measured_distance_m - true_distance_m - noise_m if prop_type != PropagationType.LOS else 0

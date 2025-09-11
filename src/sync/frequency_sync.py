@@ -34,7 +34,7 @@ class PilotPLL:
         
         # State variables
         self.phase = 0.0
-        self.frequency = 0.0  # CFO estimate
+        self.frequency = 0.0  # CFO estimate in Hz
         self.phase_error_integral = 0.0
         
         # SRO estimation
@@ -50,8 +50,29 @@ class PilotPLL:
         self.phase_error_history = deque(maxlen=100)
         self.frequency_history = deque(maxlen=100)
         
+        # Coarse frequency estimation
+        self.coarse_cfo_estimate = None
+        
+    def estimate_coarse_cfo(self, signal: np.ndarray) -> float:
+        """Estimate coarse CFO using cyclic prefix or repeated symbols"""
+        # Use autocorrelation for coarse frequency estimation
+        # Assumes some repetition in the pilot structure
+        N = len(signal) // 2
+        if N > 0:
+            r = np.correlate(signal[N:], signal[:N], mode='valid')[0]
+            angle = np.angle(r)
+            # Convert phase difference to frequency
+            cfo = angle / (2 * np.pi * N * self.dt)
+            return cfo
+        return 0.0
+    
     def process_pilot(self, received_signal: np.ndarray) -> dict:
         """Process received pilot signal through PLL"""
+        
+        # Coarse frequency acquisition on first run
+        if self.coarse_cfo_estimate is None and len(received_signal) > 100:
+            self.coarse_cfo_estimate = self.estimate_coarse_cfo(received_signal[:100])
+            self.frequency = self.coarse_cfo_estimate  # Initialize with coarse estimate
         
         results = {
             'cfo_hz': [],
@@ -61,20 +82,26 @@ class PilotPLL:
         }
         
         for i, sample in enumerate(received_signal):
-            # Phase detector (assuming complex baseband)
-            phase_error = np.angle(sample * np.exp(-1j * self.phase))
+            # Phase detector with frequency discriminator
+            # Compensate with current frequency estimate
+            compensated = sample * np.exp(-1j * (self.phase + 2 * np.pi * self.frequency * i * self.dt))
+            
+            # Phase error detection
+            phase_error = np.angle(compensated)
             
             # Wrap phase error to [-π, π]
             phase_error = np.angle(np.exp(1j * phase_error))
             
-            # Loop filter (PI controller)
+            # Loop filter (PI controller) with proper scaling
             self.phase_error_integral += phase_error * self.dt
             frequency_correction = (self.config.alpha * phase_error + 
                                    self.config.beta * self.phase_error_integral)
             
-            # Update NCO
-            self.frequency += frequency_correction * self.dt
-            self.phase += 2 * np.pi * self.frequency * self.dt
+            # Update frequency estimate
+            self.frequency += frequency_correction
+            
+            # Update phase
+            self.phase += phase_error * self.config.alpha * 0.1  # Damped phase update
             
             # Wrap phase
             self.phase = np.angle(np.exp(1j * self.phase))
