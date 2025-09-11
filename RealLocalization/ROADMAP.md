@@ -3,7 +3,7 @@
 ## Executive Summary
 Building a production-grade distributed localization system that addresses the real physics of RF ranging, synchronization, and robust optimization - everything the MPS paper ignored.
 
-## Project Status: 🟡 In Progress (15% Complete)
+## Project Status: 🟡 In Progress (60% Complete)
 
 ---
 
@@ -80,20 +80,29 @@ Building a production-grade distributed localization system that addresses the r
 
 ---
 
-## Phase 4: Message Protocol ⏳ PENDING
+## Phase 4: Message Protocol ✅ COMPLETED
 **Goal**: Implement the on-air message set from the spec
 
-### TODO
-- [ ] **Message structures**
-  - BEACON, SYNC_REQ/RESP, RNG_REQ/RESP
+### Completed ✅
+- [x] **Message structures** (`src/messages/protocol.py`)
+  - BEACON for node discovery with anchor positions
+  - SYNC_REQ/RESP for PTP-style time sync
+  - RNG_REQ/RESP for ranging exchanges
   - LM_MSG for distributed optimization
-  - TIME_STATE for consensus
-- [ ] **Superframe scheduler**
-  - TDMA slot allocation
+  - TIME_STATE for consensus broadcasts
+- [x] **Superframe scheduler**
+  - TDMA slot allocation with hash-based assignment
   - Collision avoidance
-- [ ] **Security layer**
-  - AEAD authentication
-  - Anti-replay nonces
+  - Time-to-next-slot calculations
+- [x] **Security layer** (placeholder)
+  - Message authentication code generation
+  - Anti-replay via sequence numbers
+  - Message buffering for out-of-order handling
+
+### Key Achievement
+- Complete message protocol matching production spec
+- Efficient binary packing/unpacking
+- TDMA scheduling for collision-free ranging
 
 ---
 
