@@ -1,0 +1,82 @@
+# Nearest-Neighbor FTL with Picosecond Timing
+# Configuration for 30-node network demonstrating ps timing benefits
+
+system:
+  seed: 42
+  max_iterations: 100
+  convergence_threshold: 1e-5
+  verbose: true
+
+hardware:
+  # Picosecond-capable timing hardware
+  timing_precision: "ps"  # 1 picosecond precision
+  timestamp_resolution_ns: 0.001  # 1ps = 0.001ns
+  clock_stability_ppm: 1.0  # High-stability OCXO
+  
+  # S-band RF configuration
+  carrier_freq_ghz: 2.45
+  bandwidth_mhz: 200.0
+  tx_power_dbm: 20.0
+  antenna_gain_dbi: 6.0
+  noise_figure_db: 5.0
+  
+  # High-speed sampling
+  sample_rate_msps: 250.0
+  adc_bits: 14
+
+network:
+  # Nearest-neighbor topology maximizes LOS probability
+  topology: "nearest_neighbor"
+  k_neighbors: 5
+  max_neighbor_distance_m: 10.0  # Keep links short for LOS
+  min_rssi_dbm: -90.0
+
+solver:
+  algorithm: "admm"
+  huber_delta: 1.0
+  rho: 1.0
+  use_quality_weights: true
+  outlier_threshold: 3.0
+  damping: 0.7  # Higher damping for stability
+
+# 30-node network in 50x50m area
+nodes:
+  # Anchors at corners and edges (8 total)
+  - {id: 0, position: [0, 0], is_anchor: true, name: "Anchor_SW"}
+  - {id: 1, position: [50, 0], is_anchor: true, name: "Anchor_SE"}
+  - {id: 2, position: [50, 50], is_anchor: true, name: "Anchor_NE"}
+  - {id: 3, position: [0, 50], is_anchor: true, name: "Anchor_NW"}
+  - {id: 4, position: [25, 0], is_anchor: true, name: "Anchor_S"}
+  - {id: 5, position: [50, 25], is_anchor: true, name: "Anchor_E"}
+  - {id: 6, position: [25, 50], is_anchor: true, name: "Anchor_N"}
+  - {id: 7, position: [0, 25], is_anchor: true, name: "Anchor_W"}
+  
+  # Unknown nodes (22 distributed)
+  - {id: 8, position: [10, 10], is_anchor: false, name: "Node_8"}
+  - {id: 9, position: [20, 10], is_anchor: false, name: "Node_9"}
+  - {id: 10, position: [30, 10], is_anchor: false, name: "Node_10"}
+  - {id: 11, position: [40, 10], is_anchor: false, name: "Node_11"}
+  - {id: 12, position: [10, 20], is_anchor: false, name: "Node_12"}
+  - {id: 13, position: [20, 20], is_anchor: false, name: "Node_13"}
+  - {id: 14, position: [30, 20], is_anchor: false, name: "Node_14"}
+  - {id: 15, position: [40, 20], is_anchor: false, name: "Node_15"}
+  - {id: 16, position: [10, 30], is_anchor: false, name: "Node_16"}
+  - {id: 17, position: [20, 30], is_anchor: false, name: "Node_17"}
+  - {id: 18, position: [30, 30], is_anchor: false, name: "Node_18"}
+  - {id: 19, position: [40, 30], is_anchor: false, name: "Node_19"}
+  - {id: 20, position: [10, 40], is_anchor: false, name: "Node_20"}
+  - {id: 21, position: [20, 40], is_anchor: false, name: "Node_21"}
+  - {id: 22, position: [30, 40], is_anchor: false, name: "Node_22"}
+  - {id: 23, position: [40, 40], is_anchor: false, name: "Node_23"}
+  - {id: 24, position: [15, 15], is_anchor: false, name: "Node_24"}
+  - {id: 25, position: [35, 15], is_anchor: false, name: "Node_25"}
+  - {id: 26, position: [15, 35], is_anchor: false, name: "Node_26"}
+  - {id: 27, position: [35, 35], is_anchor: false, name: "Node_27"}
+  - {id: 28, position: [25, 25], is_anchor: false, name: "Node_28_Center"}
+  - {id: 29, position: [25, 40], is_anchor: false, name: "Node_29"}
+
+# Expected performance with ps timing:
+# - Clean LOS links (<10m): ~1mm ranging error
+# - Moderate multipath: ~5cm ranging error  
+# - Severe multipath: ~30cm ranging error
+# - Overall position RMSE: ~5-10cm (with proper consensus)
