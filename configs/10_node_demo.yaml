@@ -31,14 +31,14 @@ waveform:
   pilot_power_fraction: 0.3
   ranging_power_fraction: 0.5
 
-# Channel model
+# Channel model (realistic for 10x10m indoor space)
 channel:
   environment: "indoor"
-  path_loss_exponent: 3.0     # Indoor propagation
-  nlos_probability: 0.2        # 20% chance of NLOS
-  nlos_bias_mean_m: 3.0        # NLOS adds 3m average bias
-  nlos_bias_std_m: 1.5         # NLOS bias variation
-  multipath_delay_spread_ns: 50
+  path_loss_exponent: 2.2     # Indoor LOS propagation
+  nlos_probability: 0.02       # 2% chance (rare - person walking by)
+  nlos_bias_mean_m: 0.3        # Small reflection bias
+  nlos_bias_std_m: 0.1         # Low variation
+  multipath_delay_spread_ns: 25 # Typical small room multipath
 
 # Node configuration (10x10 meter area)
 nodes:
