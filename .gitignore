@@ -81,7 +81,10 @@ configs/local/
 .ipynb_checkpoints/
 *.ipynb
 
-# Other repositories
+# Archived MPS work
+archived_mps_work/
+
+# Other repositories (already moved to archive)
 oars/
 FinalProduct/
 ToShip/
