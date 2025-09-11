@@ -44,7 +44,8 @@ class TrueDecentralizedNode:
             dimension: 2D or 3D
         """
         self.node_id = node_id
-        self.position = initial_position.copy()
+        # Ensure position is float64 to avoid type casting issues
+        self.position = np.array(initial_position, dtype=np.float64)
         self.is_anchor = is_anchor
         self.d = dimension
         
@@ -53,9 +54,9 @@ class TrueDecentralizedNode:
         self.neighbor_positions = {}  # neighbor_id -> position estimate
         self.neighbor_types = {}  # neighbor_id -> is_anchor
         
-        # For distributed optimization
-        self.gradient = np.zeros(dimension)
-        self.momentum = np.zeros(dimension)
+        # For distributed optimization (use float64 for precision)
+        self.gradient = np.zeros(dimension, dtype=np.float64)
+        self.momentum = np.zeros(dimension, dtype=np.float64)
         
         # Consensus variables for ADMM
         self.z_consensus = {}  # neighbor_id -> consensus position
@@ -80,6 +81,13 @@ class TrueDecentralizedNode:
             variance: Measurement variance
             quality: Measurement quality (0-1)
         """
+        # Input validation
+        if distance < 0:
+            raise ValueError(f"Distance cannot be negative: {distance}")
+        if variance <= 0:
+            raise ValueError(f"Variance must be positive: {variance}")
+        if not 0 <= quality <= 1:
+            raise ValueError(f"Quality must be in [0,1]: {quality}")
         self.local_measurements[neighbor_id] = LocalMeasurement(
             neighbor_id=neighbor_id,
             distance=distance,
@@ -88,10 +96,10 @@ class TrueDecentralizedNode:
         )
         self.direct_neighbors.add(neighbor_id)
         
-        # Initialize consensus variables
+        # Initialize consensus variables (ensure float64)
         if neighbor_id not in self.z_consensus:
-            self.z_consensus[neighbor_id] = self.position.copy()
-            self.u_dual[neighbor_id] = np.zeros(self.d)
+            self.z_consensus[neighbor_id] = np.array(self.position, dtype=np.float64)
+            self.u_dual[neighbor_id] = np.zeros(self.d, dtype=np.float64)
     
     def receive_neighbor_position(self, neighbor_id: int, position: np.ndarray, 
                                  is_anchor: bool = False):
@@ -125,10 +133,11 @@ class TrueDecentralizedNode:
                 diff = self.position - neighbor_pos
                 est_dist = np.linalg.norm(diff)
                 
-                if est_dist > 1e-6:
+                # Handle zero-distance edge case
+                if est_dist > 1e-10:  # Smaller epsilon for better precision
                     # Gradient of squared error
                     error = est_dist - measurement.distance
-                    weight = measurement.quality / (measurement.variance + 1e-6)
+                    weight = measurement.quality / max(measurement.variance, 1e-10)
                     
                     # Gradient contribution
                     gradient += weight * error * (diff / est_dist)
@@ -160,8 +169,9 @@ class TrueDecentralizedNode:
                 diff = self.position - neighbor_pos
                 dist = np.linalg.norm(diff)
                 
-                if dist > 1e-6:
-                    weight = measurement.quality / (measurement.variance + 1e-6)
+                # Handle zero-distance edge case
+                if dist > 1e-10:  # Smaller epsilon for better precision
+                    weight = measurement.quality / max(measurement.variance, 1e-10)
                     error = dist - measurement.distance
                     
                     # First derivative
@@ -256,7 +266,12 @@ class TrueDecentralizedSystem:
         Returns:
             Created node
         """
-        node = TrueDecentralizedNode(node_id, initial_position, is_anchor, self.d)
+        # Validate position dimensions
+        position_array = np.array(initial_position, dtype=np.float64)
+        if position_array.shape != (self.d,):
+            raise ValueError(f"Position must be {self.d}D, got shape {position_array.shape}")
+        
+        node = TrueDecentralizedNode(node_id, position_array, is_anchor, self.d)
         self.nodes[node_id] = node
         self.topology[node_id] = set()
         return node
@@ -272,6 +287,15 @@ class TrueDecentralizedSystem:
             variance: Measurement variance
             quality: Measurement quality
         """
+        # Input validation
+        if distance < 0:
+            raise ValueError(f"Distance cannot be negative: {distance}")
+        if variance <= 0:
+            raise ValueError(f"Variance must be positive: {variance}")
+        if not 0 <= quality <= 1:
+            raise ValueError(f"Quality must be in [0,1]: {quality}")
+        if node_i == node_j:
+            raise ValueError(f"Cannot add edge from node to itself: {node_i}")
         if node_i in self.nodes and node_j in self.nodes:
             # Add bidirectional measurement
             self.nodes[node_i].add_local_measurement(node_j, distance, variance, quality)

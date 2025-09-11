@@ -34,6 +34,7 @@ class RobustLocalizer:
         self.lambda_lm = 0.01  # Levenberg-Marquardt damping parameter
         self.max_iterations = 100
         self.convergence_threshold = 1e-6
+        self.epsilon = 1e-10  # For numerical stability
         
     def huber_loss(self, residual: float) -> float:
         """
@@ -111,6 +112,10 @@ class RobustLocalizer:
             # Compute estimated distance
             est_distance = np.linalg.norm(pos_i - pos_j)
             
+            # Handle zero-distance edge case
+            if est_distance < self.epsilon:
+                continue
+            
             # Weighted residual
             weight = np.sqrt(edge.quality / edge.variance)
             residual = weight * (est_distance - edge.distance)
@@ -166,7 +171,8 @@ class RobustLocalizer:
             diff = pos_i - pos_j
             dist = np.linalg.norm(diff)
             
-            if dist > 0:
+            # Handle zero-distance edge case with epsilon
+            if dist > self.epsilon:
                 gradient = diff / dist
                 weight = np.sqrt(edge.quality / edge.variance)
                 
@@ -280,8 +286,9 @@ class DistributedLocalizer:
         self.node_id = node_id
         self.neighbors = neighbors
         self.d = dimension
-        self.position = np.zeros(dimension)
-        self.gradient = np.zeros(dimension)
+        # Ensure float64 for numerical precision
+        self.position = np.zeros(dimension, dtype=np.float64)
+        self.gradient = np.zeros(dimension, dtype=np.float64)
         self.dual_variables = {n: 0.0 for n in neighbors}
         self.rho = 1.0  # ADMM penalty parameter
         
@@ -314,7 +321,8 @@ class DistributedLocalizer:
                 diff = self.position - neighbor_pos
                 curr_dist = np.linalg.norm(diff)
                 
-                if curr_dist > 0:
+                # Handle zero-distance edge case
+                if curr_dist > 1e-10:
                     # Weighted update
                     weight = quality
                     gradient = diff / curr_dist
