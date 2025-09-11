@@ -180,7 +180,8 @@ class RobustLocalizer:
     
     def solve(self, initial_positions: np.ndarray,
               measurements: List[MeasurementEdge],
-              anchor_positions: Dict[int, np.ndarray]) -> Tuple[np.ndarray, Dict]:
+              anchor_positions: Dict[int, np.ndarray],
+              unknown_node_ids: List[int] = None) -> Tuple[np.ndarray, Dict]:
         """
         Solve localization problem using robust Levenberg-Marquardt
         
@@ -322,10 +323,10 @@ class DistributedLocalizer:
                     A += weight * np.outer(gradient, gradient)
                     b += weight * gradient * (curr_dist - dist)
         
-        # Add ADMM consensus term
+        # Add ADMM consensus term (once, not per neighbor!)
+        A += self.rho * np.eye(self.d)
         for neighbor_id in self.neighbors:
             if neighbor_id in neighbor_positions:
-                A += self.rho * np.eye(self.d)
                 b += self.rho * (neighbor_positions[neighbor_id] - self.dual_variables[neighbor_id])
         
         # Solve for position update
