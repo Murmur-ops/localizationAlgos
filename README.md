@@ -20,16 +20,26 @@ This project implements a **complete RF-based localization system** that address
 - **Complete stack**: From RF waveforms to position estimates
 - **Decentralized consensus**: Better than centralized in dense networks
 
-## 🚀 Quick Start
+## Quick Start
 
-```python
-# Run full system integration test
-python tests/test_full_system.py
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-# Test individual components
-python tests/test_integrated_system.py  # RF and sync components
-python tests/test_channel_integration.py  # Channel models
+# Run the basic demo (10 nodes, 10×10m area)
+python demo_10_nodes.py
+
+# Try the challenging scenario (30 nodes, 50×50m area)
+python demo_30_nodes_large.py
+
+# See GETTING_STARTED.md for detailed instructions
 ```
+
+### What You'll See
+
+1. **10-node demo**: Sub-centimeter accuracy (1cm RMSE) with good anchor coverage
+2. **30-node demo**: Challenges with sparse anchors (20m RMSE), demonstrating real-world issues
+3. **Visualizations**: Spread spectrum signals, localization results, error distributions
 
 ## 📁 Project Structure
 
