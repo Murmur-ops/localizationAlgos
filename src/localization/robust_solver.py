@@ -111,12 +111,12 @@ class RobustLocalizer:
             
             # Compute estimated distance
             est_distance = np.linalg.norm(pos_i - pos_j)
-            
-            # Handle zero-distance edge case
+
+            # Weighted residual (don't skip any measurements)
+            # Handle zero-distance edge case with epsilon
             if est_distance < self.epsilon:
-                continue
-            
-            # Weighted residual
+                est_distance = self.epsilon
+
             weight = np.sqrt(edge.quality / edge.variance)
             residual = weight * (est_distance - edge.distance)
             residuals.append(residual)

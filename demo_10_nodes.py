@@ -122,13 +122,70 @@ def generate_measurements(config: dict) -> tuple:
     
     return measurements, anchors, unknowns, measurement_details
 
+def smart_initialization(unknowns: dict, measurements: list, anchors: dict) -> np.ndarray:
+    """Initialize unknown positions using trilateration from anchors"""
+    n_unknowns = len(unknowns)
+    initial_positions = np.zeros(n_unknowns * 2)
+    unknown_ids = sorted(unknowns.keys())
+
+    # For each unknown node, use trilateration from anchors if possible
+    for idx, uid in enumerate(unknown_ids):
+        # Find measurements from this unknown to anchors
+        anchor_dists = {}
+        for m in measurements:
+            if m.node_i == uid and m.node_j in anchors:
+                anchor_dists[m.node_j] = m.distance
+            elif m.node_j == uid and m.node_i in anchors:
+                anchor_dists[m.node_i] = m.distance
+
+        if len(anchor_dists) >= 2:
+            # Use least squares trilateration
+            anchor_ids = list(anchor_dists.keys())
+            n_anchors = len(anchor_ids)
+
+            # Build linear system for trilateration
+            # Using first anchor as reference
+            ref_id = anchor_ids[0]
+            ref_pos = anchors[ref_id]
+            ref_dist = anchor_dists[ref_id]
+
+            A = []
+            b = []
+            for i in range(1, n_anchors):
+                aid = anchor_ids[i]
+                apos = anchors[aid]
+                adist = anchor_dists[aid]
+
+                # Linear equation from difference of squared distances
+                A.append([2*(apos[0] - ref_pos[0]), 2*(apos[1] - ref_pos[1])])
+                b.append([ref_dist**2 - adist**2 + np.sum(apos**2) - np.sum(ref_pos**2)])
+
+            if len(A) > 0:
+                A = np.array(A)
+                b = np.array(b).flatten()
+
+                # Solve using least squares
+                try:
+                    pos, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+                    initial_positions[idx*2:(idx+1)*2] = pos
+                except:
+                    # Fallback to center if trilateration fails
+                    initial_positions[idx*2:(idx+1)*2] = [5.0, 5.0]
+            else:
+                initial_positions[idx*2:(idx+1)*2] = [5.0, 5.0]
+        else:
+            # Not enough anchor measurements, use center
+            initial_positions[idx*2:(idx+1)*2] = [5.0, 5.0]
+
+    return initial_positions
+
 def run_localization(config: dict, measurements: list, anchors: dict, unknowns: dict) -> dict:
     """Run the robust localization solver"""
-    
+
     print("\n" + "="*70)
     print("RUNNING LOCALIZATION")
     print("="*70)
-    
+
     # Initialize solver
     solver = RobustLocalizer(
         dimension=2,
@@ -136,12 +193,12 @@ def run_localization(config: dict, measurements: list, anchors: dict, unknowns: 
     )
     solver.max_iterations = config['system']['max_iterations']
     solver.convergence_threshold = config['system']['convergence_threshold']
-    
-    # Initialize unknown positions (random near center)
+
+    # Smart initialization using trilateration
     n_unknowns = len(unknowns)
-    initial_positions = np.random.randn(n_unknowns * 2) * 3 + 5  # Near center of 10x10
-    
-    print(f"\nInitializing {n_unknowns} unknown nodes...")
+    initial_positions = smart_initialization(unknowns, measurements, anchors)
+
+    print(f"\nInitializing {n_unknowns} unknown nodes with trilateration...")
     
     # Create filtered measurement list (only those involving unknowns)
     filtered_measurements = []

@@ -28,7 +28,9 @@
       "Read(/private/tmp/decentralized_test/fresh_test/configs/examples/**)",
       "Bash(timeout 5 mpirun -n 2 python scripts/run_distributed.py --config configs/distributed_large.yaml)",
       "WebFetch(domain:arxiv.org)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(tree:*)",
+      "Bash(git branch:*)"
     ],
     "deny": []
   }
