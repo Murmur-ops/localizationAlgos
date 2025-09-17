@@ -1,0 +1,34 @@
+# FTL (Frequency-Time-Localization) configuration
+# Joint estimation of frequency, time, and position
+
+seed: 42
+
+area:
+  size_m: 20.0
+
+nodes:
+  total: 6
+  anchors: 4
+
+# Spread spectrum signal parameters
+signal:
+  carrier_freq_hz: 2.4e9      # 2.4 GHz carrier
+  bandwidth_hz: 100.0e6       # 100 MHz bandwidth
+  chip_rate_hz: 10.23e6       # 10.23 MHz chip rate (GPS-like)
+  sample_rate_hz: 100.0e6     # 100 MHz sampling
+
+# Hardware imperfections
+hardware:
+  freq_offset_std_hz: 1000.0  # ±1 kHz frequency offset (typical TCXO)
+  time_offset_std_ns: 50.0    # ±50 ns initial time offset
+  drift_std_ppb: 10.0         # ±10 ppb clock drift
+
+# Channel parameters
+channel:
+  max_range_m: 30.0
+  min_snr_db: 0.0
+
+# Solver parameters
+solver:
+  max_iterations: 50
+  convergence_threshold: 1.0e-4
