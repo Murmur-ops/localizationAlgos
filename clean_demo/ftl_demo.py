@@ -45,30 +45,29 @@ class SpreadSpectrumSignal:
 
 
 class GoldCodeGenerator:
-    """Generate Gold codes for spread spectrum ranging"""
+    """Generate REAL Gold codes for spread spectrum ranging"""
 
     def __init__(self, length: int = 127):
-        """Initialize with shorter Gold code for faster demo"""
+        """Initialize with Gold code generator"""
+        # Import the real implementation
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from src.rf.gold_codes_proper import ProperGoldCodeGenerator
+
+        # Use real Gold codes
+        supported = [31, 63, 127, 255, 511, 1023]
+        if length not in supported:
+            length = min(supported, key=lambda x: abs(x - length))
+            print(f"Using supported length: {length}")
+
         self.length = length
-        self.codes = self._generate_gold_codes()
-
-    def _generate_gold_codes(self) -> Dict[int, np.ndarray]:
-        """Generate set of Gold codes using preferred pairs"""
-        codes = {}
-
-        # Simple PN sequence generation (simplified for demo)
-        # In practice, use proper preferred pairs
-        np.random.seed(42)
-        for i in range(32):  # Generate 32 codes
-            # Create pseudo-random sequence
-            code = np.random.choice([-1, 1], size=self.length)
-            codes[i] = code
-
-        return codes
+        self.generator = ProperGoldCodeGenerator(length)
+        self.codes = self.generator.codes
 
     def get_code(self, node_id: int) -> np.ndarray:
         """Get unique Gold code for node"""
-        return self.codes[node_id % len(self.codes)]
+        return self.generator.get_code(node_id % len(self.codes))
 
 
 class FTLTransceiver:

@@ -72,11 +72,30 @@ class SpreadSpectrumGenerator:
         return h
         
     def _generate_gold_code(self, length: int) -> np.ndarray:
-        """Generate Gold code for spreading"""
-        # Simplified: use random PN for now
-        # Real implementation would use proper Gold code generator
-        np.random.seed(42)  # Reproducible
-        return 2 * np.random.randint(0, 2, length) - 1  # +1/-1
+        """Generate Gold code for spreading using REAL Gold code generator"""
+        from .gold_codes_proper import ProperGoldCodeGenerator
+
+        # Use closest supported length
+        supported_lengths = [31, 63, 127, 255, 511, 1023]
+        closest = min(supported_lengths, key=lambda x: abs(x - length))
+
+        if closest != length:
+            print(f"Warning: Requested length {length}, using {closest}")
+
+        # Generate real Gold code
+        generator = ProperGoldCodeGenerator(closest)
+        code = generator.get_code(0)  # Use first Gold code
+
+        # Truncate or pad if needed
+        if len(code) > length:
+            return code[:length]
+        elif len(code) < length:
+            # Repeat to fill
+            repetitions = (length // len(code)) + 1
+            extended = np.tile(code, repetitions)
+            return extended[:length]
+
+        return code
     
     def generate_pilot(self, duration_s: float) -> np.ndarray:
         """Generate pilot tones/comb for frequency lock"""
