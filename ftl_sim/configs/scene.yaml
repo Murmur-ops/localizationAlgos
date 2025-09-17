@@ -1,0 +1,121 @@
+# FTL Simulation Configuration
+# Complete scene configuration for N×N grid simulation
+
+# Geometry Configuration
+geometry:
+  type: grid  # Options: grid, random, poisson
+  n_nodes: 25  # 5×5 grid
+  area_size: 100.0  # meters
+  jitter_std: 0.0  # Position jitter in meters
+  n_anchors: 4  # Number of anchor nodes
+  anchor_placement: corner  # Options: corner, perimeter, random
+
+# Clock Configuration
+clocks:
+  unknown_nodes:
+    oscillator_type: TCXO  # Options: TCXO, OCXO, CSAC
+    frequency_accuracy_ppm: 2.0
+    allan_deviation_1s: 1e-10
+    initial_bias_std: 1e-6  # seconds
+    initial_drift_std: 1e-9  # s/s
+    initial_cfo_std: 10.0  # Hz
+  anchor_nodes:
+    oscillator_type: OCXO
+    frequency_accuracy_ppm: 0.1
+    allan_deviation_1s: 1e-11
+    initial_bias_std: 1e-9
+    initial_drift_std: 1e-12
+    initial_cfo_std: 1.0
+
+# Signal Configuration
+signal:
+  type: hrp_uwb  # Options: hrp_uwb, zadoff_chu
+  carrier_freq: 6.5e9  # Hz
+  bandwidth: 499.2e6  # Hz
+  sample_rate: 1e9  # Hz
+  burst_duration: 1e-6  # seconds
+  prf: 124.8e6  # Pulse repetition frequency (HRP-UWB)
+  sequence_length: 127  # For Zadoff-Chu
+  cyclic_prefix_length: 32  # For Zadoff-Chu
+  snr_db: 20.0  # Signal-to-noise ratio
+
+# Channel Configuration
+channel:
+  environment: indoor  # Options: indoor, outdoor, urban
+  # Saleh-Valenzuela parameters
+  cluster_arrival_rate: 0.0233  # 1/ns
+  ray_arrival_rate: 0.4  # 1/ns
+  cluster_decay_factor: 10.0  # ns
+  ray_decay_factor: 5.0  # ns
+  k_factor_db: 6.0  # Rice K-factor for LOS
+  nlos_excess_delay_mean_ns: 25.0
+  nlos_excess_delay_std_ns: 10.0
+  path_loss_exponent: 2.0
+  shadowing_std_db: 4.0
+
+# Receiver Configuration
+receiver:
+  toa_detection_mode: peak  # Options: peak, leading_edge
+  toa_threshold: 0.5  # Relative threshold for detection
+  enable_subsample_refinement: true
+  cfo_estimation_method: ml  # Maximum likelihood
+  nlos_classification_enabled: true
+
+# Factor Graph Configuration
+factor_graph:
+  # Factor weights (relative importance)
+  toa_weight: 1.0
+  tdoa_weight: 0.5
+  twr_weight: 2.0  # TWR more accurate (bias-free)
+  cfo_weight: 0.1
+  prior_weight: 0.01
+
+  # Measurement variances
+  toa_variance: 1e-18  # seconds^2
+  tdoa_variance: 1e-18
+  twr_variance: 0.01  # meters^2
+  cfo_variance: 1.0  # Hz^2
+
+# Robust Optimization
+robust:
+  use_huber: true
+  huber_delta: 1.0  # Standard deviations
+  use_dcs: false
+  dcs_phi: 1.0
+  use_switchable: false
+  outlier_threshold: 3.0  # Standard deviations
+
+# Solver Configuration
+solver:
+  initialization_method: trilateration  # Options: trilateration, mds, grid, random
+  max_iterations: 100
+  convergence_tolerance: 1e-6
+  lambda_init: 1e-3  # Levenberg-Marquardt damping
+  verbose: true
+
+# Simulation Parameters
+simulation:
+  n_rounds: 10  # Number of ranging rounds
+  round_interval: 0.1  # seconds
+  max_range: 150.0  # Maximum communication range (meters)
+  los_probability: 0.8  # Probability of LOS conditions
+  measurement_noise_scale: 1.0  # Scale factor for measurement noise
+  enable_multipath: true
+  enable_clock_drift: true
+
+# Output Configuration
+output:
+  save_results: true
+  output_dir: ./results
+  save_plots: true
+  plot_format: png
+  save_trajectories: true
+  save_raw_measurements: false
+  metrics_to_compute:
+    - position_rmse
+    - position_mae
+    - clock_bias_mae
+    - clock_drift_mae
+    - cfo_rmse
+    - crlb_efficiency
+    - convergence_iterations
