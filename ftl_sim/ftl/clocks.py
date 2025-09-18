@@ -14,21 +14,25 @@ class ClockState:
     bias: float = 0.0        # Clock bias in seconds
     drift: float = 0.0       # Clock drift in s/s (dimensionless)
     cfo: float = 0.0         # Carrier frequency offset in Hz
+    sco_ppm: float = 0.0     # Sample clock offset in ppm (affects ADC sample rate)
 
     # Process noise parameters
     bias_noise_std: float = 1e-9    # 1 ns/sqrt(s)
     drift_noise_std: float = 1e-12  # 1 ppb/sqrt(s)
     cfo_noise_std: float = 1.0      # 1 Hz/sqrt(s)
+    sco_noise_std: float = 0.01     # 0.01 ppm/sqrt(s)
 
     def to_array(self) -> np.ndarray:
-        """Convert to numpy array [bias, drift, cfo]"""
-        return np.array([self.bias, self.drift, self.cfo])
+        """Convert to numpy array [bias, drift, cfo, sco_ppm]"""
+        return np.array([self.bias, self.drift, self.cfo, self.sco_ppm])
 
     def from_array(self, arr: np.ndarray):
         """Update from numpy array"""
         self.bias = arr[0]
         self.drift = arr[1]
         self.cfo = arr[2]
+        if len(arr) > 3:
+            self.sco_ppm = arr[3]
 
 
 @dataclass
@@ -118,20 +122,37 @@ class ClockModel:
         # CFO = carrier_freq * (ppm_error / 1e6)
         cfo_hz = self.carrier_freq_hz * drift_ppm * 1e-6
 
+        # Initial SCO: same PPM error affects sample clock
+        # This creates coherent CFO and SCO from same oscillator
+        sco_ppm = drift_ppm  # Same oscillator drives both RF and ADC
+
         # Process noise based on Allan variance
-        # σ²(τ) = σ²_y * τ for white frequency noise
-        # For 1 second update rate:
-        bias_noise = np.sqrt(self.allan_deviation_1s) * 3e8  # Convert to meters
-        drift_noise = self.allan_deviation_1s
+        # For white frequency noise: σ_y²(τ) = σ_y²(1s) / τ
+        # This means for discrete time steps: q = σ_y²(1s) * c² * dt
+        # where c is speed of light for time-to-distance conversion
+
+        # Bias noise: time noise scales with sqrt(dt) in continuous time
+        # σ_bias = c * σ_y(1s) * sqrt(dt) for dt=1s
+        bias_noise = self.allan_deviation_1s * 3e8  # Convert time noise to distance
+
+        # Drift noise: frequency noise is white
+        drift_noise = self.allan_deviation_1s / np.sqrt(1.0)  # Per second
+
+        # CFO noise: proportional to carrier frequency
         cfo_noise = self.carrier_freq_hz * self.allan_deviation_1s
+
+        # SCO noise: same as drift but in ppm
+        sco_noise = self.allan_deviation_1s * 1e6  # Convert to ppm
 
         return ClockState(
             bias=initial_bias,
             drift=initial_drift,
             cfo=cfo_hz,
+            sco_ppm=sco_ppm,
             bias_noise_std=bias_noise,
             drift_noise_std=drift_noise,
-            cfo_noise_std=cfo_noise
+            cfo_noise_std=cfo_noise,
+            sco_noise_std=sco_noise
         )
 
     def propagate_state(
@@ -160,9 +181,11 @@ class ClockModel:
             bias=state.bias,
             drift=state.drift,
             cfo=state.cfo,
+            sco_ppm=state.sco_ppm,
             bias_noise_std=state.bias_noise_std,
             drift_noise_std=state.drift_noise_std,
-            cfo_noise_std=state.cfo_noise_std
+            cfo_noise_std=state.cfo_noise_std,
+            sco_noise_std=state.sco_noise_std
         )
 
         # Propagate bias with drift
@@ -170,10 +193,19 @@ class ClockModel:
 
         # Add process noise if requested
         if add_noise:
-            # White frequency noise model
+            # Allan variance-based noise model
+            # For white frequency noise: σ_y²(τ) = σ_y²(1s) / τ
+            # Clock bias noise accumulates as random walk: σ ∝ sqrt(dt)
             new_state.bias += np.random.normal(0, state.bias_noise_std * np.sqrt(dt))
+
+            # Drift (frequency) has white noise: σ ∝ sqrt(dt)
             new_state.drift += np.random.normal(0, state.drift_noise_std * np.sqrt(dt))
+
+            # CFO follows same model as drift
             new_state.cfo += np.random.normal(0, state.cfo_noise_std * np.sqrt(dt))
+
+            # SCO also follows drift model
+            new_state.sco_ppm += np.random.normal(0, state.sco_noise_std * np.sqrt(dt))
 
         return new_state
 

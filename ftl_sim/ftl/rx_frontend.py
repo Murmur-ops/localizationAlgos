@@ -1,123 +1,128 @@
 """
-Receiver Front-End Module
-Matched filtering, ToA detection, CFO estimation, and CRLB calculations
+Receiver Front-End Processing
+ToA detection, CFO estimation, NLOS classification, and CRLB-based covariance
 """
 
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Optional, Tuple
 from scipy import signal as scipy_signal
+from scipy.optimize import curve_fit
 
 
 def matched_filter(
-    received: np.ndarray,
+    received_signal: np.ndarray,
     template: np.ndarray,
-    normalize: bool = True
+    mode: str = 'same'
 ) -> np.ndarray:
     """
-    Apply matched filter to received signal
+    Perform matched filtering for ToA estimation
 
     Args:
-        received: Received signal
-        template: Template/reference signal
-        normalize: Whether to normalize template energy
+        received_signal: Received signal
+        template: Template waveform
+        mode: Correlation mode ('same', 'valid', 'full')
 
     Returns:
         Correlation output
     """
-    # Normalize template for unit energy
-    if normalize:
-        template_norm = template / np.linalg.norm(template)
-    else:
-        template_norm = template
+    # Normalize template
+    template_norm = template / np.sqrt(np.sum(np.abs(template)**2))
 
-    # Matched filter is correlation with time-reversed conjugate template
-    # For complex signals: h[n] = template*[-n]
-    matched = scipy_signal.correlate(received, template_norm, mode='same')
+    # Matched filter is correlation with time-reversed conjugate
+    correlation = scipy_signal.correlate(received_signal,
+                                        np.conj(template_norm[::-1]),
+                                        mode=mode)
 
-    return matched
+    return correlation
 
 
 def detect_toa(
     correlation: np.ndarray,
     sample_rate: float,
     mode: str = 'peak',
-    threshold_factor: float = 3.0,
+    threshold: float = 0.5,
     enable_subsample: bool = True
 ) -> Dict:
     """
-    Detect Time of Arrival from correlation function
+    Detect Time of Arrival from correlation output
 
     Args:
-        correlation: Correlation function output
-        sample_rate: Sample rate in Hz
+        correlation: Matched filter output
+        sample_rate: Sampling rate
         mode: Detection mode ('peak' or 'leading_edge')
-        threshold_factor: Threshold factor above noise floor
+        threshold: Detection threshold (relative to peak)
         enable_subsample: Enable sub-sample refinement
 
     Returns:
-        Dictionary with ToA estimates and metrics
+        Dictionary with ToA estimate and metrics
     """
     correlation_mag = np.abs(correlation)
 
-    # Estimate noise floor (use median for robustness)
-    noise_floor = np.median(correlation_mag)
-    noise_std = np.median(np.abs(correlation_mag - noise_floor)) / 0.6745  # MAD estimate
+    # Find peak
+    peak_idx = np.argmax(correlation_mag)
+    peak_value = correlation_mag[peak_idx]
 
-    # Set detection threshold
-    threshold = noise_floor + threshold_factor * noise_std
+    # Estimate noise floor (use early samples)
+    noise_samples = correlation_mag[:int(len(correlation_mag)*0.1)]
+    noise_floor = np.median(noise_samples)
+    noise_std = np.std(noise_samples)
+
+    # SNR estimation
+    signal_power = peak_value**2
+    noise_power = noise_std**2
+    snr_linear = signal_power / noise_power if noise_power > 0 else float('inf')
 
     if mode == 'peak':
-        # Find strongest peak
-        peak_idx = np.argmax(correlation_mag)
-        peak_value = correlation_mag[peak_idx]
-
+        # Peak detection
+        toa_idx = peak_idx
     elif mode == 'leading_edge':
         # Find first crossing above threshold (for NLOS mitigation)
-        above_threshold = np.where(correlation_mag > threshold)[0]
+        above_threshold = np.where(correlation_mag > threshold * peak_value)[0]
 
         if len(above_threshold) > 0:
-            peak_idx = above_threshold[0]
-            peak_value = correlation_mag[peak_idx]
+            toa_idx = above_threshold[0]
         else:
-            # Fallback to peak detection
-            peak_idx = np.argmax(correlation_mag)
-            peak_value = correlation_mag[peak_idx]
-
+            toa_idx = peak_idx
     else:
-        raise ValueError(f"Unknown detection mode: {mode}")
+        raise ValueError(f"Unknown mode: {mode}")
 
-    # Sub-sample refinement using parabolic interpolation
-    refined_idx = peak_idx
-    if enable_subsample and 1 < peak_idx < len(correlation) - 2:
-        # Use 3 points around peak for parabolic fit
-        y1 = correlation_mag[peak_idx - 1]
-        y2 = correlation_mag[peak_idx]
-        y3 = correlation_mag[peak_idx + 1]
-
+    # Sub-sample refinement
+    if enable_subsample and toa_idx > 0 and toa_idx < len(correlation) - 1:
         # Parabolic interpolation
-        if y1 < y2 > y3:  # Valid peak
-            denominator = y1 - 2*y2 + y3
-            if abs(denominator) > 1e-10:  # Avoid division by zero
-                delta = 0.5 * (y1 - y3) / denominator
-                if abs(delta) < 1:  # Sanity check
-                    refined_idx = peak_idx + delta
+        y1 = correlation_mag[toa_idx - 1]
+        y2 = correlation_mag[toa_idx]
+        y3 = correlation_mag[toa_idx + 1]
+
+        if y2 > y1 and y2 > y3:  # Valid peak
+            # Parabolic fit: y = ax^2 + bx + c
+            # Peak at x = -b/(2a)
+            denom = 2*y2 - y1 - y3
+            if abs(denom) > 1e-10:
+                delta = 0.5 * (y3 - y1) / denom
+                toa_idx_refined = toa_idx + delta
+            else:
+                toa_idx_refined = float(toa_idx)
+        else:
+            toa_idx_refined = float(toa_idx)
+    else:
+        toa_idx_refined = float(toa_idx)
 
     # Convert to time
-    toa_seconds = refined_idx / sample_rate
+    toa_seconds = toa_idx_refined / sample_rate
 
     return {
-        'toa_samples': peak_idx,
-        'toa_refined_samples': refined_idx,
-        'toa_seconds': toa_seconds,
+        'toa': toa_seconds,
+        'toa_samples': toa_idx_refined,
         'peak_value': peak_value,
+        'snr': snr_linear,
+        'snr_db': 10*np.log10(snr_linear) if snr_linear > 0 else -np.inf,
         'noise_floor': noise_floor,
-        'noise_std': noise_std,
-        'snr_db': 10 * np.log10(peak_value**2 / (noise_floor**2 + 1e-10))
+        'noise_std': noise_std
     }
 
 
 def estimate_cfo(
-    blocks: List[np.ndarray],
+    blocks: list,
     block_separation_s: float,
     method: str = 'ml'
 ) -> float:
@@ -197,6 +202,39 @@ def toa_crlb(
     return variance
 
 
+def cov_from_crlb(
+    snr_linear: float,
+    beta_rms_hz: float,
+    is_los: bool = True,
+    nlos_factor: float = 2.0,
+    min_variance: float = 1e-12  # 1 ns² - prevents numerical issues
+) -> float:
+    """
+    Compute edge covariance from CRLB and channel conditions
+
+    Args:
+        snr_linear: Linear SNR from matched filter
+        beta_rms_hz: RMS bandwidth of actual signal
+        is_los: Whether channel is LOS
+        nlos_factor: Variance inflation factor for NLOS
+        min_variance: Minimum variance floor
+
+    Returns:
+        Variance for factor graph edge
+    """
+    # Base CRLB
+    crlb_var = toa_crlb(snr_linear, beta_rms_hz)
+
+    # Apply NLOS inflation
+    if not is_los:
+        crlb_var *= nlos_factor
+
+    # Apply minimum floor to prevent numerical issues
+    variance = max(crlb_var, min_variance)
+
+    return variance
+
+
 def extract_correlation_features(
     correlation: np.ndarray,
     peak_idx: int,
@@ -208,66 +246,95 @@ def extract_correlation_features(
     Args:
         correlation: Correlation function
         peak_idx: Index of main peak
-        window: Window size around peak for analysis
+        window: Window size around peak
 
     Returns:
-        Dictionary of correlation shape features
+        Dictionary of features
     """
     correlation_mag = np.abs(correlation)
 
-    # Extract window around peak
-    start_idx = max(0, peak_idx - window)
-    end_idx = min(len(correlation), peak_idx + window)
-    window_corr = correlation_mag[start_idx:end_idx]
+    # Window around peak
+    start = max(0, peak_idx - window)
+    end = min(len(correlation), peak_idx + window)
+    windowed = correlation_mag[start:end]
 
     # Peak value
     peak_value = correlation_mag[peak_idx]
 
-    # Find sidelobes (other peaks)
-    # Use scipy to find peaks
-    from scipy.signal import find_peaks
-    peaks, properties = find_peaks(correlation_mag, height=peak_value * 0.3)
-
-    # Remove main peak from list
-    other_peaks = peaks[peaks != peak_idx]
+    # RMS width
+    indices = np.arange(start, end)
+    normalized = windowed / np.sum(windowed)
+    mean_idx = np.sum(indices * normalized)
+    variance = np.sum((indices - mean_idx)**2 * normalized)
+    rms_width = np.sqrt(variance)
 
     # Peak to sidelobe ratio
-    if len(other_peaks) > 0:
-        max_sidelobe = np.max(correlation_mag[other_peaks])
-        peak_to_sidelobe = peak_value / max_sidelobe
+    # Remove peak region
+    sidelobe_region = correlation_mag.copy()
+    sidelobe_region[max(0, peak_idx-5):min(len(correlation), peak_idx+5)] = 0
+    max_sidelobe = np.max(sidelobe_region)
+    peak_to_sidelobe = peak_value / max_sidelobe if max_sidelobe > 0 else 100
+
+    # Multipath ratio (energy in tail vs peak)
+    tail_start = min(peak_idx + 10, len(correlation_mag) - 1)
+    tail_energy = np.sum(correlation_mag[tail_start:]**2)
+    peak_energy = np.sum(windowed**2)
+    multipath_ratio = tail_energy / peak_energy if peak_energy > 0 else 0
+
+    # Excess delay (center of mass after peak)
+    if tail_start < len(correlation_mag):
+        tail = correlation_mag[tail_start:]
+        if np.sum(tail) > 0:
+            tail_indices = np.arange(len(tail))
+            excess_delay = np.sum(tail_indices * tail) / np.sum(tail)
+        else:
+            excess_delay = 0
     else:
-        peak_to_sidelobe = float('inf')
+        excess_delay = 0
 
-    # RMS width (spread of correlation peak)
-    # Normalize window
-    if np.sum(window_corr) > 0:
-        window_norm = window_corr / np.sum(window_corr)
-        indices = np.arange(len(window_norm))
-        mean_idx = np.sum(indices * window_norm)
-        rms_width = np.sqrt(np.sum((indices - mean_idx)**2 * window_norm))
+    # Additional features for enhanced NLOS detection
+    # Leading edge width (rise time)
+    peak_10_percent = 0.1 * peak_value
+    peak_90_percent = 0.9 * peak_value
+    rise_indices = np.where((correlation_mag[:peak_idx] > peak_10_percent) &
+                           (correlation_mag[:peak_idx] < peak_90_percent))[0]
+    lead_width = len(rise_indices) if len(rise_indices) > 0 else 1
+
+    # Rise slope (sharpness)
+    if len(rise_indices) > 1:
+        rise_slope = (peak_90_percent - peak_10_percent) / len(rise_indices)
     else:
-        rms_width = 0
+        rise_slope = peak_value  # Very sharp
 
-    # Excess delay (how far is energy spread beyond main peak)
-    energy_total = np.sum(correlation_mag**2)
-    energy_main = correlation_mag[peak_idx]**2
-    energy_after = np.sum(correlation_mag[peak_idx+1:peak_idx+50]**2)
+    # Early-late energy ratio
+    early_window = 20
+    if peak_idx > early_window:
+        early_energy = np.sum(correlation_mag[peak_idx-early_window:peak_idx]**2)
+        late_energy = np.sum(correlation_mag[peak_idx:peak_idx+early_window]**2)
+        early_late_ratio = early_energy / late_energy if late_energy > 0 else 10
+    else:
+        early_late_ratio = 1.0
 
-    multipath_ratio = energy_after / (energy_main + 1e-10)
-    excess_delay = 0
-
-    # Find delay where 90% of energy is captured
-    cumsum_energy = np.cumsum(correlation_mag[peak_idx:]**2)
-    if len(cumsum_energy) > 0 and cumsum_energy[-1] > 0:
-        idx_90 = np.where(cumsum_energy > 0.9 * cumsum_energy[-1])[0]
-        if len(idx_90) > 0:
-            excess_delay = idx_90[0]
+    # Kurtosis (peakedness)
+    if len(windowed) > 3:
+        mean = np.mean(windowed)
+        std = np.std(windowed)
+        if std > 0:
+            kurtosis = np.mean(((windowed - mean) / std)**4) - 3
+        else:
+            kurtosis = 0
+    else:
+        kurtosis = 0
 
     return {
-        'peak_to_sidelobe_ratio': peak_to_sidelobe if peak_to_sidelobe != float('inf') else 100.0,
         'rms_width': rms_width,
+        'peak_to_sidelobe_ratio': peak_to_sidelobe,
+        'multipath_ratio': multipath_ratio,
         'excess_delay': excess_delay,
-        'multipath_ratio': multipath_ratio
+        'lead_width': lead_width,
+        'rise_slope': rise_slope,
+        'early_late_ratio': early_late_ratio,
+        'kurtosis': kurtosis
     }
 
 
@@ -321,6 +388,17 @@ def classify_propagation(
     else:
         score_nlos += 1
 
+    # New feature-based scoring
+    if features['lead_width'] < 10:
+        score_los += 1
+    else:
+        score_nlos += 1
+
+    if features['kurtosis'] > 0:  # Peaked distribution
+        score_los += 1
+    else:
+        score_nlos += 1
+
     # Determine classification
     total_score = score_los + score_nlos
     if total_score > 0:
@@ -346,43 +424,152 @@ def classify_propagation(
     }
 
 
+def covariance_from_features(
+    base_variance: float,
+    features: Dict,
+    max_inflation: float = 4.0
+) -> float:
+    """
+    Scale variance based on correlation shape features
+
+    Args:
+        base_variance: CRLB-based variance
+        features: Correlation shape features
+        max_inflation: Maximum inflation factor
+
+    Returns:
+        Scaled variance
+    """
+    inflation_factor = 1.0
+
+    # Fat leading edge indicates NLOS
+    if features['lead_width'] > 15:
+        inflation_factor *= 2.0
+    elif features['lead_width'] > 10:
+        inflation_factor *= 1.5
+
+    # Low kurtosis (spread peak) indicates multipath
+    if features['kurtosis'] < -0.5:
+        inflation_factor *= 1.5
+    elif features['kurtosis'] < 0:
+        inflation_factor *= 1.2
+
+    # High multipath ratio
+    if features['multipath_ratio'] > 0.3:
+        inflation_factor *= 1.5
+    elif features['multipath_ratio'] > 0.2:
+        inflation_factor *= 1.2
+
+    # Low peak-to-sidelobe ratio
+    if features['peak_to_sidelobe_ratio'] < 2:
+        inflation_factor *= 1.3
+
+    # Cap inflation
+    inflation_factor = min(inflation_factor, max_inflation)
+
+    return base_variance * inflation_factor
+
+
+def estimate_sco(
+    correlation: np.ndarray,
+    nominal_peak_width: int,
+    sample_rate: float
+) -> float:
+    """
+    Estimate sample clock offset from correlation peak width
+
+    SCO causes correlation peak broadening
+
+    Args:
+        correlation: Matched filter output
+        nominal_peak_width: Expected peak width without SCO
+        sample_rate: Sampling rate
+
+    Returns:
+        Estimated SCO in ppm
+    """
+    correlation_mag = np.abs(correlation)
+    peak_idx = np.argmax(correlation_mag)
+    peak_value = correlation_mag[peak_idx]
+
+    # Find 3dB width
+    threshold_3db = peak_value / np.sqrt(2)
+    above_threshold = np.where(correlation_mag > threshold_3db)[0]
+
+    if len(above_threshold) > 0:
+        actual_width = above_threshold[-1] - above_threshold[0] + 1
+    else:
+        actual_width = 1
+
+    # Width increase due to SCO
+    width_ratio = actual_width / nominal_peak_width
+
+    # Approximate SCO (simplified model)
+    # Width scales approximately linearly with SCO for small errors
+    sco_ppm = (width_ratio - 1) * 1e6
+
+    return sco_ppm
+
+
 if __name__ == "__main__":
-    # Test receiver front-end functions
+    # Test receiver processing
     print("Testing Receiver Front-End...")
     print("=" * 50)
 
-    # Test matched filter
-    print("\n1. Matched Filter Test:")
-    template = np.array([1, -1, 1, 1, -1], dtype=complex)
-    received = np.zeros(100, dtype=complex)
-    received[30:35] = template * 2  # Signal at index 30 with amplitude 2
+    # Create test signal
+    from .signal import SignalConfig, gen_hrp_burst, compute_rms_bandwidth
+
+    cfg = SignalConfig()
+    template = gen_hrp_burst(cfg, n_repeats=1)
 
     # Add noise
-    noise = 0.1 * (np.random.randn(100) + 1j * np.random.randn(100))
-    received += noise
+    snr_db = 20
+    snr_linear = 10**(snr_db/10)
+    signal_power = np.mean(np.abs(template)**2)
+    noise_power = signal_power / snr_linear
+    noise = np.sqrt(noise_power/2) * (np.random.randn(len(template)) +
+                                      1j * np.random.randn(len(template)))
+    received = template + noise
 
+    # Test matched filter
+    print("\nMatched Filter:")
     correlation = matched_filter(received, template)
-    peak_idx = np.argmax(np.abs(correlation))
-    print(f"  Peak at index: {peak_idx}")
-    print(f"  Peak value: {np.abs(correlation[peak_idx]):.2f}")
+    print(f"  Correlation length: {len(correlation)}")
 
     # Test ToA detection
-    print("\n2. ToA Detection Test:")
-    result = detect_toa(correlation, sample_rate=1e9)
-    print(f"  ToA: {result['toa_seconds']*1e9:.2f} ns")
-    print(f"  SNR: {result['snr_db']:.1f} dB")
+    print("\nToA Detection:")
+    toa_result = detect_toa(correlation, cfg.sample_rate, enable_subsample=True)
+    print(f"  ToA: {toa_result['toa']*1e9:.2f} ns")
+    print(f"  SNR: {toa_result['snr_db']:.1f} dB")
+    print(f"  Peak value: {toa_result['peak_value']:.3f}")
 
-    # Test CRLB
-    print("\n3. CRLB Test:")
-    snr_linear = 100  # 20 dB
-    bandwidth = 500e6  # 500 MHz
+    # Test CRLB calculation
+    print("\nCRLB Calculation:")
+    beta_rms = compute_rms_bandwidth(template, cfg.sample_rate)
+    crlb_var = toa_crlb(snr_linear, beta_rms)
+    crlb_std = np.sqrt(crlb_var)
+    print(f"  RMS bandwidth: {beta_rms/1e6:.1f} MHz")
+    print(f"  CRLB σ(ToA): {crlb_std*1e12:.1f} ps")
+    print(f"  CRLB σ(range): {crlb_std*3e8*100:.2f} cm")
 
-    variance = toa_crlb(snr_linear, bandwidth)
-    std_seconds = np.sqrt(variance)
-    std_meters = 3e8 * std_seconds
+    # Test covariance from CRLB
+    print("\nCovariance from CRLB:")
+    cov_los = cov_from_crlb(snr_linear, beta_rms, is_los=True)
+    cov_nlos = cov_from_crlb(snr_linear, beta_rms, is_los=False)
+    print(f"  LOS variance: {cov_los:.3e} s²")
+    print(f"  NLOS variance: {cov_nlos:.3e} s²")
+    print(f"  NLOS/LOS ratio: {cov_nlos/cov_los:.1f}")
 
-    print(f"  Bandwidth: {bandwidth/1e6:.0f} MHz")
-    print(f"  SNR: {10*np.log10(snr_linear):.1f} dB")
-    print(f"  CRLB std: {std_meters*100:.2f} cm")
+    # Test feature extraction
+    print("\nCorrelation Features:")
+    features = extract_correlation_features(correlation, np.argmax(np.abs(correlation)))
+    print(f"  RMS width: {features['rms_width']:.1f}")
+    print(f"  Peak/sidelobe: {features['peak_to_sidelobe_ratio']:.1f}")
+    print(f"  Lead width: {features['lead_width']}")
+    print(f"  Kurtosis: {features['kurtosis']:.2f}")
 
-    print("\nTest completed successfully!")
+    # Test classification
+    print("\nLOS/NLOS Classification:")
+    classification = classify_propagation(correlation)
+    print(f"  Type: {classification['type']}")
+    print(f"  Confidence: {classification['confidence']*100:.1f}%")

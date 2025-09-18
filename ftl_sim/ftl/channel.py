@@ -6,6 +6,7 @@ Wideband multipath channel with cluster structure for UWB
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
+from scipy import signal as scipy_signal
 
 
 @dataclass
@@ -343,6 +344,65 @@ def compute_path_loss(
     return path_loss_db
 
 
+def apply_sample_clock_offset(
+    signal: np.ndarray,
+    sco_ppm: float,
+    sample_rate: float
+) -> np.ndarray:
+    """
+    Apply sample clock offset to signal (models ADC sample rate error)
+
+    SCO causes the receiver to sample at a slightly different rate than
+    the transmitter, leading to accumulated timing error proportional to
+    the signal duration.
+
+    Args:
+        signal: Input signal
+        sco_ppm: Sample clock offset in parts per million
+        sample_rate: Nominal sample rate in Hz
+
+    Returns:
+        Signal with SCO applied (resampled)
+    """
+    if abs(sco_ppm) < 0.01:  # Less than 0.01 ppm, negligible
+        return signal
+
+    # Calculate actual vs nominal sample rates
+    actual_rate_ratio = 1 + sco_ppm / 1e6
+
+    # Resample signal to simulate sampling at wrong rate
+    # Use polyphase resampling for accuracy
+    if actual_rate_ratio > 1:
+        # Receiver sampling faster than transmitter
+        # Signal appears stretched in time
+        p = 10000  # Numerator
+        q = int(p / actual_rate_ratio)  # Denominator
+    else:
+        # Receiver sampling slower
+        # Signal appears compressed in time
+        q = 10000  # Denominator
+        p = int(q * actual_rate_ratio)  # Numerator
+
+    # Ensure p and q are coprime for best resampling
+    from math import gcd
+    common = gcd(p, q)
+    p = p // common
+    q = q // common
+
+    # Apply resampling
+    resampled = scipy_signal.resample_poly(signal, p, q)
+
+    # Trim or pad to original length
+    if len(resampled) > len(signal):
+        resampled = resampled[:len(signal)]
+    elif len(resampled) < len(signal):
+        # Pad with zeros
+        padding = len(signal) - len(resampled)
+        resampled = np.pad(resampled, (0, padding), mode='constant')
+
+    return resampled
+
+
 def add_awgn(signal: np.ndarray, snr_db: float) -> np.ndarray:
     """
     Add AWGN to achieve specified SNR
@@ -378,7 +438,8 @@ def propagate_signal(
     snr_db: float = 20.0,
     cfo_hz: float = 0.0,
     clock_bias_s: float = 0.0,
-    clock_drift_ppm: float = 0.0
+    clock_drift_ppm: float = 0.0,
+    sco_ppm: float = 0.0
 ) -> Dict:
     """
     Propagate signal through channel with all impairments
@@ -391,6 +452,7 @@ def propagate_signal(
         cfo_hz: Carrier frequency offset in Hz
         clock_bias_s: Clock bias in seconds
         clock_drift_ppm: Clock drift in ppm
+        sco_ppm: Sample clock offset in ppm
 
     Returns:
         Dictionary with propagated signal and metadata
@@ -405,13 +467,9 @@ def propagate_signal(
         cfo_phasor = np.exp(1j * 2 * np.pi * cfo_hz * t)
         signal_multipath = signal_multipath * cfo_phasor
 
-    # Apply sample clock drift (resample if significant)
-    if abs(clock_drift_ppm) > 1:
-        # Simplified: just phase ramp for small drifts
-        drift_hz = sample_rate * clock_drift_ppm / 1e6
-        t = np.arange(len(signal_multipath)) / sample_rate
-        drift_phase = np.exp(1j * 2 * np.pi * drift_hz * t * t / 2)
-        signal_multipath = signal_multipath * drift_phase
+    # Apply sample clock offset (SCO)
+    if abs(sco_ppm) > 0.01:
+        signal_multipath = apply_sample_clock_offset(signal_multipath, sco_ppm, sample_rate)
 
     # Add AWGN
     signal_noisy = add_awgn(signal_multipath, snr_db)
@@ -426,6 +484,7 @@ def propagate_signal(
         'true_toa': true_toa,
         'snr_actual': snr_db,
         'cfo_actual': cfo_hz,
+        'sco_actual': sco_ppm,
         'multipath_profile': channel
     }
 
