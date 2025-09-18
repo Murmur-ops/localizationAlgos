@@ -30,7 +30,11 @@
       "WebFetch(domain:arxiv.org)",
       "Bash(timeout:*)",
       "Bash(tree:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Read(//Users/maxburnett/Documents/RadarSim//**)",
+      "Bash(for:*)",
+      "Bash(done)",
+      "Bash(while read demo)"
     ],
     "deny": []
   }

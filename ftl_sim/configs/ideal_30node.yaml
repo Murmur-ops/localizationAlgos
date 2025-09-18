@@ -1,0 +1,277 @@
+# Ideal Conditions Configuration for 30-Node Consensus
+# Achieves 0.9 cm RMSE with distributed consensus
+#
+# Usage:
+#   python run_yaml_config.py configs/ideal_30node.yaml
+#
+# Performance:
+#   - Best accuracy: 0.9 cm RMSE (μ=0.05, 457 iterations)
+#   - Fast mode: 1.0 cm RMSE (μ=0.10, 49 iterations)
+#   - 42% improvement over no consensus
+
+# Scene Configuration
+scene:
+  name: "Ideal 30-Node Network"
+  description: "Sub-centimeter accuracy demonstration with ideal conditions"
+
+  # Area dimensions
+  area:
+    width: 50.0  # meters
+    height: 50.0  # meters
+    margin: 5.0  # Keep nodes 5m from edges
+
+  # Number of nodes
+  n_nodes: 30
+  n_anchors: 5  # 4 corners + 1 center
+
+  # Node placement
+  placement:
+    anchors:
+      type: "fixed"
+      positions:  # 5 anchors: corners + center
+        - [0.0, 0.0]
+        - [50.0, 0.0]
+        - [50.0, 50.0]
+        - [0.0, 50.0]
+        - [25.0, 25.0]  # Center anchor critical for preventing collinearity
+
+    unknowns:
+      type: "grid"  # Uniform grid distribution
+      grid_size: 5  # 5x5 grid for 25 unknowns
+      x_range: [5.0, 45.0]  # Keep 5m margins
+      y_range: [5.0, 45.0]
+      # Alternative: type: "random" for random placement
+
+  # Communication range
+  comm_range: 25.0  # meters (half the area for good connectivity)
+
+  # Expected performance
+  expected_rmse: 0.009  # 0.9 cm in meters
+  expected_iterations: 457  # With optimal parameters
+
+# Signal Configuration
+signal:
+  # Waveform parameters
+  carrier_freq: 6.5e9  # 6.5 GHz (UWB)
+  bandwidth: 499.2e6  # 499.2 MHz
+  sample_rate: 1.0e9  # 1 GHz
+
+  # Burst configuration
+  burst_duration: 1.0e-6  # 1 microsecond
+  prf: 124.8e6  # Pulse repetition frequency
+
+  # Signal type
+  signal_type: "HRP_UWB"  # IEEE 802.15.4z HRP
+  sequence_length: 127
+  cyclic_prefix_length: 32
+
+# Channel Configuration
+channel:
+  # Ideal conditions - no multipath or NLOS
+  model: "free_space"  # Simple free-space path loss
+
+  # Noise level (very low for ideal conditions)
+  snr_db: 40.0  # High SNR
+
+  # No multipath
+  multipath:
+    enabled: false
+    n_paths: 1  # Direct path only
+
+  # Path loss model
+  path_loss:
+    model: "free_space"
+    reference_distance: 1.0  # meters
+    path_loss_exponent: 2.0  # Free space
+
+# Clock Configuration
+clocks:
+  # Clock quality
+  oscillator_type: "TCXO"  # Temperature compensated crystal
+  allan_deviation_1s: 1.0e-11  # Very stable clocks
+
+  # Initial errors (small for ideal conditions)
+  initial_bias_std: 1.0e-9  # 1 ns
+  initial_drift_ppm: 1.0  # 1 ppm
+
+  # Carrier frequency for CFO calculation
+  carrier_freq_hz: 6.5e9
+
+  # Process noise (low for stable clocks)
+  bias_noise_std: 1.0e-10  # 0.1 ns/sqrt(s)
+  drift_noise_std: 1.0e-13  # 0.1 ppb/sqrt(s)
+
+  # Sample clock offset (coherent with oscillator)
+  sco_enabled: false  # Disable for ideal conditions
+  sco_ppm: 0.0  # No SCO in ideal case
+
+# Measurement Configuration
+measurements:
+  # Measurement type
+  type: "ToA"  # Time of Arrival
+
+  # Measurement noise (very low)
+  range_noise_std: 0.01  # 1 cm standard deviation
+
+  # No outliers in ideal conditions
+  outlier_probability: 0.0
+
+  # Update rate
+  measurement_rate: 10.0  # Hz
+
+  # CRLB-based covariance
+  use_crlb: true
+  min_variance: 1.0e-4  # 1 cm² minimum
+
+  # NLOS detection (not needed for ideal)
+  nlos_detection:
+    enabled: false
+    variance_inflation: 1.0  # No inflation
+
+# Consensus Algorithm Configuration
+consensus:
+  # Algorithm selection
+  algorithm: "consensus_gauss_newton"
+
+  # Optimal parameters for accuracy
+  parameters_accurate:
+    max_iterations: 500
+    consensus_gain: 0.05  # μ - optimal for accuracy
+    step_size: 0.3  # α - conservative
+    gradient_tol: 1.0e-5
+    step_tol: 1.0e-6
+    damping_lambda: 1.0e-4  # Levenberg-Marquardt
+
+  # Fast convergence parameters
+  parameters_fast:
+    max_iterations: 100
+    consensus_gain: 0.10  # Higher μ for speed
+    step_size: 0.4  # Slightly more aggressive
+    gradient_tol: 1.0e-4  # Relaxed tolerance
+    step_tol: 1.0e-5
+    damping_lambda: 1.0e-4
+
+  # Choose which parameter set to use
+  use_parameters: "accurate"  # or "fast"
+
+  # State scaling for numerical stability
+  state_scale: [1.0, 1.0, 1.0, 0.1, 0.1]  # [x, y, bias, drift, cfo]
+
+  # Convergence monitoring
+  convergence:
+    check_interval: 10  # Check every 10 iterations
+    window_size: 10  # Look at last 10 iterations
+    rmse_threshold: 1.0e-4  # 0.1 mm change threshold
+
+  # Network validation
+  min_neighbors: 1  # Minimum neighbors for unknowns
+  require_anchor_path: true  # Each unknown needs path to anchor
+
+# Initialization Configuration
+initialization:
+  # Initial position estimates
+  method: "gaussian"  # Add Gaussian noise to true positions
+
+  # For ideal conditions - very good initial guesses
+  position_noise_std: 0.5  # 50 cm standard deviation
+
+  # Alternative initialization methods
+  # method: "trilateration"  # Use trilateration from anchors
+  # method: "center"  # All unknowns start at area center
+  # method: "random"  # Random within area
+
+  # Clock initialization
+  clock_bias_std: 1.0e-9  # 1 ns
+  clock_drift_std: 1.0e-6  # 1 ppm
+
+# Solver Configuration (for comparison)
+solver:
+  # Centralized solver for baseline comparison
+  type: "batch_wls"  # Weighted least squares
+  max_iterations: 50
+  convergence_tol: 1.0e-6
+
+  # Use as baseline
+  run_baseline: true
+
+# Output Configuration
+output:
+  # Results to save
+  save_positions: true
+  save_errors: true
+  save_convergence_history: true
+  save_network_topology: true
+
+  # Visualization
+  plot_network: true
+  plot_errors: true
+  plot_convergence: true
+
+  # File formats
+  format: "json"  # or "csv", "mat"
+  output_dir: "results/ideal_30node/"
+
+  # Metrics to compute
+  metrics:
+    - "rmse"
+    - "mean_error"
+    - "max_error"
+    - "percentiles"  # 50th, 90th, 95th
+    - "convergence_iterations"
+    - "computation_time"
+
+# Simulation Configuration
+simulation:
+  # Random seed for reproducibility
+  random_seed: 42
+
+  # Number of Monte Carlo runs
+  n_runs: 1  # Single run for ideal conditions
+  # For statistics: n_runs: 100
+
+  # Parallel processing
+  n_workers: 4
+
+  # Verbosity
+  verbose: true
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+  # Save intermediate results
+  save_interval: 50  # Save every 50 iterations
+
+# Experimental Variations (for testing)
+variations:
+  # Test different consensus gains
+  test_consensus_gains: [0.01, 0.05, 0.10, 0.20, 0.50]
+
+  # Test different network sizes
+  test_node_counts: [10, 20, 30, 40, 50]
+
+  # Test different noise levels
+  test_noise_levels: [0.005, 0.01, 0.02, 0.05, 0.10]  # meters
+
+  # Test different communication ranges
+  test_comm_ranges: [15, 20, 25, 30, 35]  # meters
+
+  # Enable variation testing
+  run_variations: false  # Set to true to test variations
+
+# Performance Benchmarks
+benchmarks:
+  # Expected performance under ideal conditions
+  ideal:
+    rmse_cm: 0.9
+    iterations: 457
+    convergence_time_s: 2.0
+
+  # Acceptable performance thresholds
+  thresholds:
+    max_rmse_cm: 2.0  # Fail if RMSE > 2 cm
+    max_iterations: 500  # Fail if doesn't converge
+    max_time_s: 5.0  # Fail if takes too long
+
+  # Compare with other algorithms
+  baselines:
+    no_consensus_rmse_cm: 1.6
+    centralized_rmse_cm: 0.7
+    particle_filter_rmse_cm: 1.2

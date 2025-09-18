@@ -1,0 +1,205 @@
+# FTL System Configuration
+# 30 nodes with 4 anchors in 50x50m area
+
+system:
+  name: "FTL Network - 30 Nodes"
+  description: "Distributed localization network with 30 nodes (4 anchors) in 50x50m area"
+  version: "1.0"
+
+network:
+  total_nodes: 30
+  anchor_nodes: 4
+  area:
+    width_m: 50.0
+    height_m: 50.0
+    height_variation_m: 2.0  # Small height variations for ground nodes
+
+# Anchor positions (fixed at corners for good GDOP)
+anchors:
+  - id: 0
+    position: [5.0, 5.0, 1.5]      # Near corner (SW)
+    name: "Anchor_SW"
+    clock_quality: "perfect"        # True reference
+
+  - id: 1
+    position: [45.0, 5.0, 1.5]     # Near corner (SE)
+    name: "Anchor_SE"
+    clock_quality: "perfect"
+
+  - id: 2
+    position: [45.0, 45.0, 1.5]    # Near corner (NE)
+    name: "Anchor_NE"
+    clock_quality: "perfect"
+
+  - id: 3
+    position: [5.0, 45.0, 1.5]     # Near corner (NW)
+    name: "Anchor_NW"
+    clock_quality: "perfect"
+
+# Regular node parameters
+nodes:
+  count: 26  # 30 total - 4 anchors = 26 regular nodes
+
+  # Initial position distribution
+  position:
+    distribution: "uniform"
+    x_range: [0.0, 50.0]
+    y_range: [0.0, 50.0]
+    z_range: [0.0, 2.0]
+
+  # Mobility model
+  mobility:
+    model: "random_waypoint"
+    speed_range_mps: [0.5, 5.0]    # Walking to jogging speeds
+    pause_time_s: [1.0, 10.0]
+    update_interval_s: 0.1
+
+  # Clock errors for regular nodes
+  clock:
+    offset_range_ns: [-100.0, 100.0]      # ±100ns initial offset
+    drift_range_ppb: [-10.0, 10.0]        # ±10 ppb drift
+    freq_offset_range_hz: [-100.0, 100.0] # ±100 Hz frequency offset
+
+# RF channel configuration
+rf_channel:
+  frequency_hz: 2.4e9
+  bandwidth_hz: 100e6
+  tx_power_dbm: 20
+
+  # Path loss model
+  path_loss:
+    model: "two_ray_ground"
+    path_loss_exponent: 4.0  # Two-way ranging
+
+  # Multipath
+  multipath:
+    enabled: true
+    ground_reflection_coefficient: -0.7
+    max_reflections: 2
+
+  # Noise and interference
+  noise:
+    thermal_noise_dbm: -174
+    noise_figure_db: 6
+    interference_margin_db: 3
+
+  # Hardware impairments
+  hardware:
+    iq_amplitude_imbalance_db: 0.5
+    iq_phase_imbalance_deg: 3.0
+    phase_noise_dbc_hz: -80
+    adc_bits: 12
+    adc_sampling_rate_hz: 200e6
+
+# Ranging configuration
+ranging:
+  # Gold code parameters
+  gold_code:
+    length: 127
+    chip_rate_hz: 1.023e6
+
+  # Two-way ranging protocol
+  protocol:
+    type: "two_way_time_transfer"
+    processing_delay_ns: 1000  # 1 microsecond
+    measurement_noise_ns: 5.0
+
+  # Measurement schedule
+  schedule:
+    mode: "round_robin"
+    interval_ms: 100
+    pairs_per_round: 435  # C(30,2) = 435 possible pairs
+
+# Time synchronization
+time_sync:
+  algorithm: "kalman_twtt"  # Two-way time transfer with Kalman filter
+
+  # Multi-phase synchronization
+  phases:
+    - name: "coarse"
+      rounds: 10
+      measurement_noise_ns: 25.0
+      process_noise:
+        offset_ns: 1.0
+        drift_ppb: 0.1
+
+    - name: "medium"
+      rounds: 10
+      measurement_noise_ns: 5.0
+      process_noise:
+        offset_ns: 0.1
+        drift_ppb: 0.01
+
+    - name: "fine"
+      rounds: 10
+      measurement_noise_ns: 1.0
+      process_noise:
+        offset_ns: 0.01
+        drift_ppb: 0.001
+
+  # Convergence criteria
+  convergence:
+    target_accuracy_ns: 1.0
+    max_rounds: 50
+
+# Localization algorithm
+localization:
+  algorithm: "trilateration"
+
+  # Solver parameters
+  solver:
+    type: "least_squares"
+    max_iterations: 100
+    convergence_threshold: 1e-6
+
+  # GDOP calculation
+  gdop:
+    calculate: true
+    warning_threshold: 5.0
+
+  # Filtering
+  filter:
+    type: "extended_kalman"
+    process_noise_m: 0.1
+    measurement_noise_m: 1.0
+
+# Simulation parameters
+simulation:
+  duration_s: 60
+  time_step_s: 0.1
+
+  # Output configuration
+  output:
+    save_trajectories: true
+    save_measurements: true
+    save_estimates: true
+    output_dir: "results/30node_network"
+
+  # Visualization
+  visualization:
+    enabled: true
+    update_rate_hz: 10
+    show_anchors: true
+    show_nodes: true
+    show_links: true
+    show_errors: true
+
+  # Performance metrics
+  metrics:
+    calculate_rmse: true
+    calculate_cep: true  # Circular error probable
+    calculate_gdop: true
+    calculate_crb: true  # Cramér-Rao bound
+
+# Logging
+logging:
+  level: "INFO"
+  console: true
+  file: "logs/ftl_30node.log"
+
+  # Detailed logging for specific components
+  components:
+    time_sync: "DEBUG"
+    ranging: "INFO"
+    localization: "INFO"
+    rf_channel: "WARNING"

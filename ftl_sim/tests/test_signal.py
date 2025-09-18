@@ -10,11 +10,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ftl.signal import (
     SignalConfig,
-    generate_ternary_sequence,
+    gen_ternary_sequence,
     gen_hrp_burst,
     gen_zc_burst,
-    generate_rrc_pulse,
-    bandpass_filter,
+    gen_rrc_pulse,
+    apply_lowpass_filter,
     add_pilot_tones
 )
 
@@ -50,25 +50,25 @@ class TestTernarySequence(unittest.TestCase):
 
     def test_ternary_values(self):
         """Test that sequence contains only {-1, 0, +1}"""
-        seq = generate_ternary_sequence(100, seed=42)
+        seq = gen_ternary_sequence(100, seed=42)
         unique_values = np.unique(seq)
         self.assertTrue(all(v in [-1, 0, 1] for v in unique_values))
 
     def test_ternary_length(self):
         """Test sequence length"""
         for length in [32, 64, 128]:
-            seq = generate_ternary_sequence(length)
+            seq = gen_ternary_sequence(length)
             self.assertEqual(len(seq), length)
 
     def test_ternary_reproducibility(self):
         """Test reproducibility with seed"""
-        seq1 = generate_ternary_sequence(100, seed=42)
-        seq2 = generate_ternary_sequence(100, seed=42)
+        seq1 = gen_ternary_sequence(100, seed=42)
+        seq2 = gen_ternary_sequence(100, seed=42)
         np.testing.assert_array_equal(seq1, seq2)
 
     def test_ternary_zero_density(self):
         """Test that sequence has reasonable zero density"""
-        seq = generate_ternary_sequence(1000, seed=42)
+        seq = gen_ternary_sequence(1000, seed=42)
         zero_ratio = np.sum(seq == 0) / len(seq)
         # Should have significant zeros for good autocorrelation
         # Actual implementation gives ~60% zeros
@@ -224,14 +224,14 @@ class TestPulseShaping(unittest.TestCase):
 
     def test_rrc_pulse_generation(self):
         """Test RRC pulse generation"""
-        pulse = generate_rrc_pulse(span=6, sps=8, beta=0.35)
+        pulse = gen_rrc_pulse(span=6, sps=8, beta=0.35)
 
         self.assertIsInstance(pulse, np.ndarray)
         self.assertEqual(len(pulse), 6 * 8 + 1)  # span * sps + 1
 
     def test_rrc_pulse_symmetry(self):
         """Test that RRC pulse is symmetric"""
-        pulse = generate_rrc_pulse(span=6, sps=8, beta=0.5)
+        pulse = gen_rrc_pulse(span=6, sps=8, beta=0.5)
 
         # Check symmetry
         center = len(pulse) // 2
@@ -242,14 +242,14 @@ class TestPulseShaping(unittest.TestCase):
 
     def test_rrc_pulse_normalization(self):
         """Test that RRC pulse is normalized"""
-        pulse = generate_rrc_pulse(span=4, sps=8, beta=0.35)
+        pulse = gen_rrc_pulse(span=4, sps=8, beta=0.35)
         norm = np.linalg.norm(pulse)
         self.assertAlmostEqual(norm, 1.0, places=5)
 
     def test_rrc_beta_values(self):
         """Test different roll-off factors"""
         for beta in [0.1, 0.35, 0.5, 0.9]:
-            pulse = generate_rrc_pulse(span=4, sps=8, beta=beta)
+            pulse = gen_rrc_pulse(span=4, sps=8, beta=beta)
             self.assertIsInstance(pulse, np.ndarray)
             self.assertGreater(len(pulse), 0)
 
@@ -266,7 +266,7 @@ class TestBandpassFilter(unittest.TestCase):
                  np.exp(1j * 2 * np.pi * 200 * t))     # 200 Hz
 
         # Filter with 100 Hz bandwidth (should keep 50 Hz, remove 200 Hz)
-        filtered = bandpass_filter(signal, fs, bandwidth=100)
+        filtered = apply_lowpass_filter(signal, fs, bandwidth=100)
 
         # Check spectrum
         fft = np.fft.fft(filtered)
@@ -283,7 +283,7 @@ class TestBandpassFilter(unittest.TestCase):
     def test_filter_preserves_length(self):
         """Test that filtering preserves signal length"""
         signal = np.random.randn(1000) + 1j * np.random.randn(1000)
-        filtered = bandpass_filter(signal, fs=1000, bandwidth=100)
+        filtered = apply_lowpass_filter(signal, fs=1000, bandwidth=100)
         self.assertEqual(len(filtered), len(signal))
 
 

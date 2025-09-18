@@ -23,18 +23,19 @@ class TestClockState(unittest.TestCase):
 
     def test_to_array(self):
         """Test conversion to numpy array"""
-        state = ClockState(bias=1e-6, drift=2e-9, cfo=50.0)
+        state = ClockState(bias=1e-6, drift=2e-9, cfo=50.0, sco_ppm=5.0)
         arr = state.to_array()
-        np.testing.assert_array_equal(arr, np.array([1e-6, 2e-9, 50.0]))
+        np.testing.assert_array_equal(arr, np.array([1e-6, 2e-9, 50.0, 5.0]))
 
     def test_from_array(self):
         """Test update from numpy array"""
         state = ClockState()
-        arr = np.array([1e-6, 2e-9, 50.0])
+        arr = np.array([1e-6, 2e-9, 50.0, 5.0])
         state.from_array(arr)
         self.assertEqual(state.bias, 1e-6)
         self.assertEqual(state.drift, 2e-9)
         self.assertEqual(state.cfo, 50.0)
+        self.assertEqual(state.sco_ppm, 5.0)
 
 
 class TestClockModel(unittest.TestCase):

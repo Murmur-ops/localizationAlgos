@@ -1,0 +1,17 @@
+# Simple demo configuration
+# 10 nodes in a 20x20m area
+
+seed: 42
+
+area:
+  size_m: 20.0
+
+nodes:
+  total: 10
+  anchors: 4  # Corner anchors
+
+channel:
+  bandwidth_hz: 100.0e6  # 100 MHz
+  snr_db: 20.0          # Good SNR
+  min_snr_db: -5.0      # Minimum acceptable SNR
+  max_range_m: 30.0     # Maximum ranging distance

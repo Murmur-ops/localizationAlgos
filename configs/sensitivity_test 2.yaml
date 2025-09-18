@@ -1,0 +1,90 @@
+# Configuration for FTL Sensitivity Analysis
+# Tests sensitivity to SNR, Bandwidth, Clock Sync, and Geometry
+
+system:
+  num_nodes: 30
+  num_anchors: 4
+  num_unknowns: 26
+  area_size_m: 50.0
+  convergence_threshold: 1.0e-6
+
+channel:
+  # Baseline channel parameters
+  carrier_freq_hz: 2.4e9  # 2.4 GHz
+  bandwidth_hz: 100.0e6   # 100 MHz baseline
+  nominal_snr_db: 20.0    # 20 dB baseline SNR
+
+  # Path loss model
+  path_loss_exponent: 3.5  # Urban environment
+  reference_distance_m: 1.0
+  reference_loss_db: 40.0
+
+  # Multipath parameters
+  enable_multipath: true
+  rician_k_factor_db: 10.0
+  delay_spread_ns: 50.0
+
+  # NLOS parameters
+  nlos_probability: 0.15
+  nlos_bias_mean_m: 5.0
+  nlos_bias_std_m: 2.0
+
+  # Hardware impairments
+  timestamp_resolution_ns: 1.0
+  crystal_stability_ppm: 20.0
+
+solver:
+  huber_delta: 1.0
+  max_iterations: 100
+  convergence_threshold: 1.0e-4
+
+sensitivity_tests:
+  # SNR sweep parameters
+  snr:
+    min_db: -10
+    max_db: 40
+    step_db: 5
+    description: "Signal-to-Noise Ratio (precision floor)"
+
+  # Bandwidth sweep parameters
+  bandwidth:
+    values_mhz: [1, 5, 10, 20, 40, 80, 100, 200]
+    description: "Signal bandwidth (resolution floor)"
+
+  # Clock sync sweep parameters
+  clock_sync:
+    offset_values_ns: [0, 1, 5, 10, 50, 100, 500, 1000]
+    drift_values_ppb: [0, 10, 100, 1000]
+    description: "Time synchronization accuracy (bias floor)"
+
+  # Geometry sweep parameters
+  geometry:
+    anchor_percentages: [10, 15, 20, 30, 40, 50, 60, 70]
+    placement_types: ["uniform", "grid", "clustered"]
+    description: "Anchor geometry (error amplification)"
+
+# Expected performance targets
+performance_targets:
+  indoor:
+    area_m: 10
+    target_rmse_m: 0.5
+    required_snr_db: 20
+    required_bandwidth_mhz: 100
+    required_clock_sync_ns: 10
+    required_anchor_percent: 40
+
+  urban:
+    area_m: 100
+    target_rmse_m: 2.0
+    required_snr_db: 15
+    required_bandwidth_mhz: 20
+    required_clock_sync_ns: 50
+    required_anchor_percent: 30
+
+  rural:
+    area_m: 1000
+    target_rmse_m: 10.0
+    required_snr_db: 10
+    required_bandwidth_mhz: 10
+    required_clock_sync_ns: 100
+    required_anchor_percent: 20

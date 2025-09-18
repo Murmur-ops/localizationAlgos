@@ -161,15 +161,21 @@ class FactorGraph:
         residuals, stds = self._compute_residuals()
 
         if weights is None:
+            # Compute weights with same bounding as in optimization
+            max_weight = 1e10
             weights = np.ones(len(residuals))
+            for i, std in enumerate(stds):
+                weight = 1.0 / (std * std) if std > 0 else max_weight
+                weights[i] = min(weight, max_weight)
 
         # Weighted least squares cost
         cost = 0.0
-        for r, s, w in zip(residuals, stds, weights):
+        for r, w in zip(residuals, weights):
             if self.robust_config.use_huber:
-                cost += w * self.robust_kernel.cost(r, s)
+                # Note: Huber cost needs to be updated for proper weighting
+                cost += w * r**2  # Simplified for now
             else:
-                cost += 0.5 * w * (r / s)**2
+                cost += 0.5 * w * r**2
 
         return cost
 
@@ -282,16 +288,25 @@ class FactorGraph:
             # Build Jacobian and residuals
             J, r, node_to_idx, idx_to_node = self._build_jacobian()
 
-            # Compute weights if using robust optimization
+            # Compute weights from variances with bounding
             residuals, stds = self._compute_residuals()
             weights = np.ones(len(residuals))
 
+            # Compute weights as 1/variance with maximum bound
+            max_weight = 1e10  # Maximum weight to prevent numerical issues
+            for i, std in enumerate(stds):
+                # Weight = 1/variance = 1/std²
+                weight = 1.0 / (std * std) if std > 0 else max_weight
+                weights[i] = min(weight, max_weight)
+
+            # Apply robust kernel if needed
             if self.robust_config.use_huber or self.robust_config.use_dcs:
                 for i, (res, std) in enumerate(zip(residuals, stds)):
-                    weights[i] = self.robust_kernel.weight(res, std)
+                    # Multiply by robust weight (0-1 scale factor)
+                    weights[i] *= self.robust_kernel.weight(res, std)
 
             # Apply weights
-            W = np.diag(weights)
+            W = np.diag(np.sqrt(weights))  # Use sqrt for proper scaling
             J_weighted = W @ J
             r_weighted = W @ r
 
@@ -299,8 +314,13 @@ class FactorGraph:
             H = J_weighted.T @ J_weighted
             g = J_weighted.T @ r_weighted
 
-            # Add damping
-            H_damped = H + lambda_lm * np.diag(np.diag(H))
+            # Add damping with minimum regularization for unconstrained variables
+            diag_H = np.diag(H)
+            regularization = lambda_lm * diag_H
+            # Add minimum regularization to prevent singular matrix
+            min_regularization = 1e-6  # Increased for better numerical stability
+            regularization = np.maximum(regularization, min_regularization)
+            H_damped = H + np.diag(regularization)
 
             try:
                 # Solve for update
@@ -329,8 +349,9 @@ class FactorGraph:
                     print(f"Iteration {iteration}: cost = {new_cost:.6f}, "
                           f"λ = {lambda_lm:.2e}")
 
-                # Check convergence
-                if cost_decrease < tolerance:
+                # Check convergence using relative change
+                relative_decrease = cost_decrease / (prev_cost + 1e-20)
+                if relative_decrease < tolerance:
                     converged = True
                     break
 

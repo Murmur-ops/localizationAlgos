@@ -1,55 +1,49 @@
 """
 Signal Generation Module
-IEEE 802.15.4z HRP-UWB and Zadoff-Chu CAZAC sequences
+IEEE 802.15.4z HRP-UWB and Zadoff-Chu waveform generation with RMS bandwidth calculation
 """
 
 import numpy as np
+from typing import Optional, Tuple, Union
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from scipy import signal as scipy_signal
 
 
 @dataclass
 class SignalConfig:
     """Configuration for signal generation"""
-    # Signal type
-    signal_type: str = "HRP_UWB"  # HRP_UWB or ZADOFF_CHU
-
-    # HRP-UWB parameters (IEEE 802.15.4z)
-    prf_mhz: float = 124.8  # Pulse repetition frequency (124.8 or 249.6 MHz)
-    bandwidth_mhz: float = 499.2  # Channel bandwidth
-    preamble_length: int = 64  # Number of symbols in preamble
-    sfd_length: int = 8  # Start frame delimiter length
-
-    # Zadoff-Chu parameters
-    zc_length: int = 1023  # Sequence length (should be prime)
-    zc_root: int = 7  # Root index (coprime with length)
-
-    # Common parameters
-    sample_rate_hz: float = 2e9  # 2 GS/s
-    n_repeats: int = 8  # Number of repeats for CFO estimation
-    pulse_shape: str = "RRC"  # RRC or GAUSSIAN
-
-    # Modulation
-    modulation: str = "BPSK"  # BPSK or 4M (4-ary modulation)
+    carrier_freq: float = 6.5e9  # Hz
+    bandwidth: float = 499.2e6  # Hz
+    sample_rate: float = 1e9  # Hz
+    burst_duration: float = 1e-6  # seconds
+    prf: float = 124.8e6  # Pulse repetition frequency (Hz)
+    sequence_length: int = 127
+    cyclic_prefix_length: int = 32
+    pilot_power_db: float = -10  # Pilot power relative to signal
 
 
-def generate_ternary_sequence(length: int, seed: int = 42) -> np.ndarray:
+def gen_ternary_sequence(length: int, density: float = 0.5, seed: Optional[int] = None) -> np.ndarray:
     """
-    Generate ternary preamble sequence for HRP-UWB
-    Values are {-1, 0, +1} with specific autocorrelation properties
+    Generate ternary preamble sequence {-1, 0, +1}
+
+    Args:
+        length: Sequence length
+        density: Fraction of non-zero elements
+        seed: Random seed
+
+    Returns:
+        Ternary sequence array
     """
-    np.random.seed(seed)
+    if seed is not None:
+        np.random.seed(seed)
 
-    # Generate with 1/3 probability for each value
-    # Real HRP uses specific sequences, but we'll use random for simplicity
-    sequence = np.random.choice([-1, 0, 1], size=length, p=[0.3, 0.4, 0.3])
+    # Generate sparse ternary
+    seq = np.zeros(length)
+    n_nonzero = int(length * density)
+    nonzero_idx = np.random.choice(length, n_nonzero, replace=False)
+    seq[nonzero_idx] = np.random.choice([-1, 1], n_nonzero)
 
-    # Ensure good autocorrelation by adjusting zero density
-    # More zeros = better autocorrelation sidelobes
-    zero_indices = np.random.choice(length, size=int(0.4 * length), replace=False)
-    sequence[zero_indices] = 0
-
-    return sequence
+    return seq
 
 
 def gen_hrp_burst(
@@ -57,151 +51,194 @@ def gen_hrp_burst(
     n_repeats: Optional[int] = None
 ) -> np.ndarray:
     """
-    Generate HRP-UWB sync burst per IEEE 802.15.4z HPRF mode
+    Generate IEEE 802.15.4z HRP-UWB burst
 
-    The HRP (High Rate Pulse) preamble consists of:
-    1. SYNC field with repeated ternary sequences
-    2. SFD (Start Frame Delimiter) for frame sync
-    3. Optional STS (Scrambled Timestamp Sequence) for security
+    High Rate Pulse UWB with ternary preamble
 
     Args:
         cfg: Signal configuration
-        n_repeats: Number of repetitions (overrides config)
+        n_repeats: Number of preamble repetitions (auto if None)
 
     Returns:
         Complex baseband signal
     """
+    # Calculate samples
+    n_samples = int(cfg.burst_duration * cfg.sample_rate)
+
+    # PRF period in samples
+    prf_period_samples = int(cfg.sample_rate / cfg.prf)
+
     if n_repeats is None:
-        n_repeats = cfg.n_repeats
+        n_repeats = n_samples // (cfg.sequence_length * prf_period_samples)
+        n_repeats = max(1, n_repeats)
 
-    # Time parameters
-    dt = 1.0 / cfg.sample_rate_hz
-    prf_period = 1.0 / (cfg.prf_mhz * 1e6)
-    samples_per_symbol = int(prf_period / dt)
+    # Generate ternary preamble
+    preamble = gen_ternary_sequence(cfg.sequence_length, density=0.5)
 
-    # Generate ternary preamble sequence
-    preamble = generate_ternary_sequence(cfg.preamble_length)
+    # Create pulse train
+    signal_out = np.zeros(n_samples, dtype=complex)
 
-    # Generate SFD (typically a known pattern)
-    sfd = np.array([1, -1, 1, 1, -1, -1, 1, -1])[:cfg.sfd_length]
+    for rep in range(n_repeats):
+        for i, symbol in enumerate(preamble):
+            if symbol != 0:
+                idx = rep * cfg.sequence_length * prf_period_samples + i * prf_period_samples
+                if idx < n_samples:
+                    # Generate UWB pulse (Gaussian derivative)
+                    pulse = gen_uwb_pulse(cfg.sample_rate, cfg.bandwidth)
+                    pulse_len = len(pulse)
 
-    # Combine preamble and SFD
-    full_sequence = np.concatenate([preamble, sfd])
+                    # Place pulse
+                    end_idx = min(idx + pulse_len, n_samples)
+                    signal_out[idx:end_idx] = symbol * pulse[:end_idx-idx]
 
-    # Generate pulse shape
-    if cfg.pulse_shape == "GAUSSIAN":
-        # Gaussian pulse for UWB
-        pulse_duration = 2e-9  # 2 ns pulse width
-        pulse_samples = int(pulse_duration / dt)
-        t_pulse = np.arange(pulse_samples) * dt - pulse_duration / 2
-        sigma = pulse_duration / 6  # 3-sigma within duration
-        pulse = np.exp(-(t_pulse**2) / (2 * sigma**2))
-        pulse = pulse / np.linalg.norm(pulse)
-    else:  # RRC
-        # Root-raised cosine pulse
-        pulse = generate_rrc_pulse(
-            span=4,
-            sps=samples_per_symbol,
-            beta=0.5
-        )
+    return signal_out
 
-    # Generate modulated signal
-    signal = np.zeros(len(full_sequence) * samples_per_symbol, dtype=complex)
 
-    for i, symbol in enumerate(full_sequence):
-        if symbol != 0:  # Only transmit for non-zero symbols
-            start_idx = i * samples_per_symbol
-            end_idx = start_idx + len(pulse)
-            if end_idx <= len(signal):
-                signal[start_idx:end_idx] += symbol * pulse
+def gen_uwb_pulse(sample_rate: float, bandwidth: float) -> np.ndarray:
+    """
+    Generate UWB pulse (Gaussian monocycle)
 
-    # Repeat for CFO estimation
-    repeated_signal = np.tile(signal, n_repeats)
+    Args:
+        sample_rate: Sampling frequency
+        bandwidth: Pulse bandwidth
 
-    # Apply bandpass filtering to match channel bandwidth
-    filtered_signal = bandpass_filter(
-        repeated_signal,
-        cfg.sample_rate_hz,
-        cfg.bandwidth_mhz * 1e6
-    )
+    Returns:
+        UWB pulse waveform
+    """
+    # Pulse duration inversely proportional to bandwidth
+    sigma = 1.0 / (2 * np.pi * bandwidth / 4)
+    pulse_duration = 10 * sigma
 
-    return filtered_signal
+    t = np.arange(-pulse_duration/2, pulse_duration/2, 1/sample_rate)
+
+    # Gaussian monocycle (first derivative of Gaussian)
+    pulse = -t / sigma**2 * np.exp(-t**2 / (2*sigma**2))
+
+    # Normalize
+    pulse = pulse / np.max(np.abs(pulse))
+
+    return pulse
 
 
 def gen_zc_burst(
     cfg: SignalConfig,
-    n_repeats: Optional[int] = None,
-    nzc: Optional[int] = None,
-    u: Optional[int] = None
+    n_repeats: Optional[int] = None
 ) -> np.ndarray:
     """
-    Generate repeated Zadoff-Chu CAZAC burst
+    Generate Zadoff-Chu CAZAC sequence burst
 
-    ZC sequences have ideal autocorrelation (zero sidelobes) and
-    constant amplitude, making them excellent for timing and CFO.
+    Constant Amplitude Zero Autocorrelation Cyclic sequence
 
     Args:
         cfg: Signal configuration
-        n_repeats: Number of repetitions
-        nzc: Sequence length (should be prime)
-        u: Root index (should be coprime with nzc)
+        n_repeats: Number of sequence repetitions
 
     Returns:
         Complex baseband signal
     """
+    # Calculate samples
+    n_samples = int(cfg.burst_duration * cfg.sample_rate)
+
+    # Generate ZC sequence
+    N = cfg.sequence_length
+    u = find_coprime(N)  # Root index
+
+    n = np.arange(N)
+    if N % 2 == 0:
+        zc_seq = np.exp(-1j * np.pi * u * n * (n + 1) / N)
+    else:
+        zc_seq = np.exp(-1j * np.pi * u * n * n / N)
+
+    # Add cyclic prefix
+    cp = zc_seq[-cfg.cyclic_prefix_length:]
+    zc_with_cp = np.concatenate([cp, zc_seq])
+
+    # Determine number of repeats
+    seq_len = len(zc_with_cp)
     if n_repeats is None:
-        n_repeats = cfg.n_repeats
-    if nzc is None:
-        nzc = cfg.zc_length
-    if u is None:
-        u = cfg.zc_root
+        n_repeats = n_samples // seq_len
+        n_repeats = max(1, n_repeats)
 
-    # Check that u and nzc are coprime
-    if np.gcd(u, nzc) != 1:
-        raise ValueError(f"Root {u} must be coprime with length {nzc}")
+    # Create burst
+    signal_out = np.zeros(n_samples, dtype=complex)
 
-    # Generate Zadoff-Chu sequence
-    n = np.arange(nzc)
-    if nzc % 2 == 0:
-        # Even length
-        zc_sequence = np.exp(-1j * np.pi * u * n * (n + 1) / nzc)
-    else:
-        # Odd length
-        zc_sequence = np.exp(-1j * np.pi * u * n * (n + 1) / nzc)
+    for rep in range(n_repeats):
+        start_idx = rep * seq_len
+        end_idx = min(start_idx + seq_len, n_samples)
+        if start_idx < n_samples:
+            signal_out[start_idx:end_idx] = zc_with_cp[:end_idx-start_idx]
 
-    # Upsample to target sample rate
-    samples_per_chip = int(cfg.sample_rate_hz / (cfg.prf_mhz * 1e6))
-    upsampled = np.zeros(nzc * samples_per_chip, dtype=complex)
-    upsampled[::samples_per_chip] = zc_sequence
-
-    # Apply pulse shaping
-    if cfg.pulse_shape == "RRC":
-        pulse = generate_rrc_pulse(span=6, sps=samples_per_chip, beta=0.35)
-        signal = np.convolve(upsampled, pulse, mode='same')
-    else:
-        # Simple rectangular pulse
-        signal = upsampled
-
-    # Add cyclic prefix for timing acquisition (10% of sequence)
-    cp_length = int(0.1 * len(signal))
-    signal_with_cp = np.concatenate([signal[-cp_length:], signal])
-
-    # Repeat for CFO estimation
-    repeated_signal = np.tile(signal_with_cp, n_repeats)
-
-    # Normalize power
-    repeated_signal = repeated_signal / np.sqrt(np.mean(np.abs(repeated_signal)**2))
-
-    return repeated_signal
+    return signal_out
 
 
-def generate_rrc_pulse(
-    span: int = 6,
-    sps: int = 8,
-    beta: float = 0.35
+def find_coprime(N: int) -> int:
+    """
+    Find coprime root index for Zadoff-Chu sequence
+
+    Args:
+        N: Sequence length
+
+    Returns:
+        Coprime root index
+    """
+    # Common good choices
+    if N == 127:
+        return 25
+    elif N == 139:
+        return 50
+
+    # Find first coprime
+    for u in range(1, N):
+        if np.gcd(u, N) == 1:
+            return u
+
+    return 1
+
+
+def add_pilot_tones(
+    signal: np.ndarray,
+    sample_rate: float,
+    pilot_freqs: list,
+    pilot_power_db: float = -10
 ) -> np.ndarray:
     """
-    Generate root-raised cosine pulse for pulse shaping
+    Add pilot tones for CFO estimation
+
+    Args:
+        signal: Input signal
+        sample_rate: Sampling rate
+        pilot_freqs: List of pilot frequencies
+        pilot_power_db: Pilot power relative to signal (dB)
+
+    Returns:
+        Signal with pilots added
+    """
+    signal_out = signal.copy()
+    t = np.arange(len(signal)) / sample_rate
+
+    # Calculate pilot amplitude
+    signal_power = np.mean(np.abs(signal)**2)
+    if signal_power == 0:
+        pilot_power_linear = 10**(pilot_power_db / 10)
+    else:
+        pilot_power_linear = 10**(pilot_power_db / 10) * signal_power
+    pilot_amplitude = np.sqrt(pilot_power_linear)
+
+    # Add pilots
+    for freq in pilot_freqs:
+        pilot = pilot_amplitude * np.exp(1j * 2 * np.pi * freq * t)
+        signal_out += pilot
+
+    return signal_out
+
+
+def gen_rrc_pulse(
+    span: int,
+    sps: int,
+    beta: float
+) -> np.ndarray:
+    """
+    Generate root-raised cosine pulse
 
     Args:
         span: Filter span in symbols
@@ -212,117 +249,125 @@ def generate_rrc_pulse(
         RRC pulse shape
     """
     N = span * sps
-    t = np.arange(-N//2, N//2 + 1) / sps
+    t = np.arange(-N/2, N/2 + 1) / sps
 
     # Handle special cases
     pulse = np.zeros_like(t)
 
-    # t = 0 case
+    # t = 0
     idx_zero = np.where(t == 0)[0]
     if len(idx_zero) > 0:
-        pulse[idx_zero] = 1 + beta * (4/np.pi - 1)
+        pulse[idx_zero] = (1 + beta*(4/np.pi - 1))
 
-    # t = ±1/(4β) case
+    # t = ±1/(4β)
     idx_special = np.where(np.abs(t) == 1/(4*beta))[0]
     if len(idx_special) > 0:
-        pulse[idx_special] = (beta/np.sqrt(2)) * (
-            (1 + 2/np.pi) * np.sin(np.pi/(4*beta)) +
-            (1 - 2/np.pi) * np.cos(np.pi/(4*beta))
-        )
+        pulse[idx_special] = (beta/np.sqrt(2)) * ((1 + 2/np.pi) * np.sin(np.pi/(4*beta)) +
+                                                  (1 - 2/np.pi) * np.cos(np.pi/(4*beta)))
 
     # General case
     idx_general = np.where((t != 0) & (np.abs(t) != 1/(4*beta)))[0]
-    if len(idx_general) > 0:
-        t_g = t[idx_general]
-        numerator = np.sin(np.pi * t_g * (1 - beta)) + \
-                   4 * beta * t_g * np.cos(np.pi * t_g * (1 + beta))
-        denominator = np.pi * t_g * (1 - (4 * beta * t_g)**2)
-        pulse[idx_general] = numerator / denominator
+    t_g = t[idx_general]
+    pulse[idx_general] = (np.sin(np.pi*t_g*(1-beta)) + 4*beta*t_g*np.cos(np.pi*t_g*(1+beta))) / \
+                        (np.pi*t_g*(1 - (4*beta*t_g)**2))
 
     # Normalize
-    pulse = pulse / np.linalg.norm(pulse)
+    pulse = pulse / np.sqrt(np.sum(pulse**2))
 
     return pulse
 
 
-def bandpass_filter(
+def apply_lowpass_filter(
     signal: np.ndarray,
-    fs: float,
-    bandwidth: float,
-    center_freq: float = 0
+    sample_rate: float,
+    cutoff_freq: float,
+    order: int = 5
 ) -> np.ndarray:
     """
-    Apply ideal bandpass filter (for complex baseband, this is lowpass)
+    Apply lowpass filter to signal
 
     Args:
         signal: Input signal
-        fs: Sample rate
-        bandwidth: Filter bandwidth
-        center_freq: Center frequency (0 for baseband)
+        sample_rate: Sampling rate
+        cutoff_freq: Cutoff frequency
+        order: Filter order
 
     Returns:
         Filtered signal
     """
-    # For complex baseband, just do lowpass filtering
-    n = len(signal)
-    freq = np.fft.fftfreq(n, 1/fs)
+    nyquist = sample_rate / 2
+    normalized_cutoff = cutoff_freq / nyquist
 
-    # FFT of signal
-    signal_fft = np.fft.fft(signal)
+    b, a = scipy_signal.butter(order, normalized_cutoff, btype='low')
+    filtered = scipy_signal.filtfilt(b, a, signal)
 
-    # Ideal rectangular filter
-    filter_mask = np.abs(freq) <= bandwidth / 2
-
-    # Apply filter
-    filtered_fft = signal_fft * filter_mask
-
-    # IFFT back to time domain
-    filtered_signal = np.fft.ifft(filtered_fft)
-
-    return filtered_signal
+    return filtered
 
 
-def add_pilot_tones(
+def compute_rms_bandwidth(
     signal: np.ndarray,
-    pilot_freqs_mhz: List[float],
-    sample_rate: float,
-    pilot_power_db: float = -10
-) -> np.ndarray:
+    sample_rate: float
+) -> float:
     """
-    Add pilot tones for enhanced CFO tracking
+    Compute RMS bandwidth of signal for CRLB calculation
+
+    β_rms = sqrt(∫f²|S(f)|²df / ∫|S(f)|²df)
 
     Args:
-        signal: Input signal
-        pilot_freqs_mhz: Pilot frequencies in MHz
-        sample_rate: Sample rate in Hz
-        pilot_power_db: Pilot power relative to signal
+        signal: Time-domain signal
+        sample_rate: Sampling rate in Hz
 
     Returns:
-        Signal with pilots added
+        RMS bandwidth in Hz
     """
-    n = len(signal)
-    t = np.arange(n) / sample_rate
+    # Compute PSD
+    freqs, psd = scipy_signal.periodogram(signal, sample_rate, scaling='density')
 
-    # Calculate pilot amplitude
+    # Remove DC and negative frequencies
+    positive_idx = freqs > 0
+    freqs = freqs[positive_idx]
+    psd = psd[positive_idx]
+
+    # Numerical integration
+    df = freqs[1] - freqs[0]
+
+    # Denominator: ∫|S(f)|²df (total power)
+    total_power = np.sum(psd) * df
+
+    if total_power == 0:
+        # Fallback to nominal bandwidth / sqrt(3) for flat spectrum
+        return sample_rate / (2 * np.sqrt(3))
+
+    # Numerator: ∫f²|S(f)|²df
+    f2_weighted_power = np.sum(freqs**2 * psd) * df
+
+    # RMS bandwidth
+    beta_rms = np.sqrt(f2_weighted_power / total_power)
+
+    return beta_rms
+
+
+def compute_signal_snr(
+    signal: np.ndarray,
+    noise: np.ndarray
+) -> float:
+    """
+    Compute SNR from signal and noise samples
+
+    Args:
+        signal: Signal samples
+        noise: Noise samples
+
+    Returns:
+        Linear SNR (not dB)
+    """
     signal_power = np.mean(np.abs(signal)**2)
+    noise_power = np.mean(np.abs(noise)**2)
 
-    # Handle case where signal is zero
-    if signal_power == 0:
-        # Use absolute power level (assume 0 dBm reference)
-        pilot_power_linear = 10**(pilot_power_db / 10)
-    else:
-        pilot_power_linear = 10**(pilot_power_db / 10) * signal_power
+    if noise_power == 0:
+        return float('inf')
 
-    pilot_amplitude = np.sqrt(pilot_power_linear)
-
-    # Add each pilot tone
-    output = signal.copy()
-    for freq_mhz in pilot_freqs_mhz:
-        freq_hz = freq_mhz * 1e6
-        pilot = pilot_amplitude * np.exp(1j * 2 * np.pi * freq_hz * t)
-        output += pilot
-
-    return output
+    return signal_power / noise_power
 
 
 if __name__ == "__main__":
@@ -332,48 +377,38 @@ if __name__ == "__main__":
 
     cfg = SignalConfig()
 
-    # Test HRP-UWB generation
-    print("\nGenerating HRP-UWB burst...")
-    hrp_signal = gen_hrp_burst(cfg, n_repeats=4)
-    print(f"  Signal length: {len(hrp_signal)} samples")
-    print(f"  Duration: {len(hrp_signal) / cfg.sample_rate_hz * 1e6:.1f} µs")
-    print(f"  RMS power: {np.sqrt(np.mean(np.abs(hrp_signal)**2)):.3f}")
+    # Test HRP-UWB
+    print("\nHRP-UWB Burst:")
+    hrp = gen_hrp_burst(cfg, n_repeats=3)
+    print(f"  Length: {len(hrp)} samples")
+    print(f"  Duration: {len(hrp)/cfg.sample_rate*1e6:.1f} μs")
+    print(f"  Peak amplitude: {np.max(np.abs(hrp)):.3f}")
 
-    # Check bandwidth
-    fft = np.fft.fft(hrp_signal)
-    freq = np.fft.fftfreq(len(hrp_signal), 1/cfg.sample_rate_hz)
-    power_spectrum = np.abs(fft)**2
-    # Find -3dB bandwidth
-    peak_power = np.max(power_spectrum)
-    bw_indices = np.where(power_spectrum > peak_power / 2)[0]
-    if len(bw_indices) > 0:
-        bandwidth = np.max(np.abs(freq[bw_indices])) * 2
-        print(f"  Measured bandwidth: {bandwidth / 1e6:.1f} MHz")
+    # Compute RMS bandwidth
+    beta_rms = compute_rms_bandwidth(hrp, cfg.sample_rate)
+    print(f"  RMS bandwidth: {beta_rms/1e6:.1f} MHz")
+    print(f"  Nominal BW: {cfg.bandwidth/1e6:.1f} MHz")
+    print(f"  Ratio: {beta_rms/cfg.bandwidth:.2f}")
 
-    # Test Zadoff-Chu generation
-    print("\nGenerating Zadoff-Chu burst...")
-    zc_signal = gen_zc_burst(cfg, n_repeats=4)
-    print(f"  Signal length: {len(zc_signal)} samples")
-    print(f"  Duration: {len(zc_signal) / cfg.sample_rate_hz * 1e6:.1f} µs")
-    print(f"  RMS power: {np.sqrt(np.mean(np.abs(zc_signal)**2)):.3f}")
+    # Test Zadoff-Chu
+    print("\nZadoff-Chu Burst:")
+    zc = gen_zc_burst(cfg, n_repeats=3)
+    print(f"  Length: {len(zc)} samples")
+    print(f"  Duration: {len(zc)/cfg.sample_rate*1e6:.1f} μs")
+    print(f"  Peak amplitude: {np.max(np.abs(zc)):.3f}")
 
-    # Check constant amplitude property
-    amplitude_variation = np.std(np.abs(zc_signal[100:-100]))  # Exclude edges
-    print(f"  Amplitude variation: {amplitude_variation:.4f} (should be ~0 for CAZAC)")
+    # Check CAZAC property
+    autocorr = np.abs(np.correlate(zc[:cfg.sequence_length],
+                                   zc[:cfg.sequence_length], 'full'))
+    peak_idx = cfg.sequence_length - 1
+    peak_val = autocorr[peak_idx]
+    sidelobe_max = np.max(np.concatenate([autocorr[:peak_idx-1],
+                                         autocorr[peak_idx+2:]]))
+    print(f"  CAZAC ratio: {peak_val/sidelobe_max:.1f}")
 
-    # Test autocorrelation of ZC sequence
-    print("\nTesting Zadoff-Chu autocorrelation...")
-    zc_short = gen_zc_burst(cfg, n_repeats=1)[:cfg.zc_length * 10]
-    autocorr = np.correlate(zc_short, zc_short, mode='same')
-    autocorr_normalized = np.abs(autocorr) / np.max(np.abs(autocorr))
-
-    # Find sidelobe level
-    center = len(autocorr) // 2
-    peak = autocorr_normalized[center]
-    sidelobes = np.concatenate([
-        autocorr_normalized[:center-10],
-        autocorr_normalized[center+10:]
-    ])
-    max_sidelobe = np.max(sidelobes) if len(sidelobes) > 0 else 0
-    print(f"  Peak correlation: {peak:.3f}")
-    print(f"  Max sidelobe: {max_sidelobe:.4f} (should be ~0 for ideal CAZAC)")
+    # Test pilot tones
+    print("\nPilot Tone Addition:")
+    signal_with_pilots = add_pilot_tones(hrp, cfg.sample_rate,
+                                        [1e6, -1e6], -10)
+    print(f"  Original power: {np.mean(np.abs(hrp)**2):.3e}")
+    print(f"  With pilots power: {np.mean(np.abs(signal_with_pilots)**2):.3e}")
