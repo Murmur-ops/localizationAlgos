@@ -8,6 +8,7 @@ import numpy as np
 import sys
 import time
 from pathlib import Path
+import matplotlib.pyplot as plt
 from ftl.consensus.consensus_gn import ConsensusGaussNewton, ConsensusGNConfig
 from ftl.factors_scaled import ToAFactorMeters
 
@@ -16,6 +17,105 @@ def load_config(config_path):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     return config
+
+def plot_results(true_positions, estimated_positions, n_anchors, comm_range, results, config):
+    """Plot network topology and position estimates"""
+    n_nodes = len(true_positions)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    # Plot 1: Network topology
+    ax = axes[0]
+    ax.set_title('Network Topology')
+    ax.set_xlabel('X (meters)')
+    ax.set_ylabel('Y (meters)')
+    ax.set_aspect('equal')
+
+    # Draw communication links
+    for i in range(n_nodes):
+        for j in range(i+1, n_nodes):
+            dist = np.linalg.norm(true_positions[i] - true_positions[j])
+            if dist <= comm_range:
+                ax.plot([true_positions[i][0], true_positions[j][0]],
+                       [true_positions[i][1], true_positions[j][1]],
+                       'gray', alpha=0.2, linewidth=0.5)
+
+    # Plot anchors and unknowns
+    ax.scatter(true_positions[:n_anchors, 0], true_positions[:n_anchors, 1],
+              s=200, c='red', marker='s', label='Anchors', zorder=5)
+    ax.scatter(true_positions[n_anchors:, 0], true_positions[n_anchors:, 1],
+              s=50, c='blue', marker='o', label='Unknown nodes', zorder=4)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # Plot 2: True vs Estimated positions
+    ax = axes[1]
+    ax.set_title('Position Estimates')
+    ax.set_xlabel('X (meters)')
+    ax.set_ylabel('Y (meters)')
+    ax.set_aspect('equal')
+
+    # Plot true positions
+    ax.scatter(true_positions[:n_anchors, 0], true_positions[:n_anchors, 1],
+              s=200, c='red', marker='s', label='Anchors', zorder=5)
+    ax.scatter(true_positions[n_anchors:, 0], true_positions[n_anchors:, 1],
+              s=100, c='blue', marker='o', label='True positions', zorder=4)
+
+    # Plot estimated positions with larger, more visible markers
+    ax.scatter(estimated_positions[n_anchors:, 0], estimated_positions[n_anchors:, 1],
+              s=150, c='green', marker='x', label='Estimated', zorder=6, linewidths=2)
+
+    # Draw error vectors (scale up for visibility if errors are small)
+    errors = np.linalg.norm(true_positions[n_anchors:] - estimated_positions[n_anchors:], axis=1)
+    max_error = np.max(errors) if len(errors) > 0 else 0
+
+    # Scale factor for visibility - if errors are very small, scale them up for visualization
+    scale_factor = 1.0
+    if max_error > 0 and max_error < 0.5:  # If max error < 50cm, scale up for visibility
+        scale_factor = 0.5 / max_error  # Scale so max arrow is 50cm
+        ax.text(0.02, 0.98, f'Error vectors scaled {scale_factor:.1f}× for visibility',
+                transform=ax.transAxes, fontsize=8, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.7))
+
+    for i in range(n_anchors, n_nodes):
+        error_vec = (estimated_positions[i] - true_positions[i]) * scale_factor
+        if np.linalg.norm(error_vec) > 0.01:  # Only draw if error is meaningful
+            ax.arrow(true_positions[i][0], true_positions[i][1],
+                    error_vec[0], error_vec[1],
+                    head_width=0.3, head_length=0.2, fc='red', ec='red',
+                    alpha=0.6, linewidth=0.5, zorder=5)
+
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # Plot 3: Error distribution
+    ax = axes[2]
+    errors = np.linalg.norm(true_positions[n_anchors:] - estimated_positions[n_anchors:], axis=1)
+    errors_cm = errors * 100  # Convert to cm
+
+    ax.hist(errors_cm, bins=20, edgecolor='black', alpha=0.7)
+    ax.set_title('Error Distribution')
+    ax.set_xlabel('Position Error (cm)')
+    ax.set_ylabel('Number of Nodes')
+    ax.axvline(np.mean(errors_cm), color='red', linestyle='--',
+               label=f'Mean: {np.mean(errors_cm):.1f} cm')
+    ax.axvline(np.median(errors_cm), color='green', linestyle='--',
+               label=f'Median: {np.median(errors_cm):.1f} cm')
+
+    # Add statistics text
+    stats_text = f"RMSE: {results['position_errors']['rmse']*100:.1f} cm\n"
+    stats_text += f"Max: {results['position_errors']['max']*100:.1f} cm\n"
+    stats_text += f"Iterations: {results['iterations']}"
+    ax.text(0.65, 0.95, stats_text, transform=ax.transAxes,
+            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.suptitle(config['scene']['name'], fontsize=14, fontweight='bold')
+    plt.tight_layout()
+
+    return fig
 
 def setup_network(config):
     """Setup network from configuration"""
@@ -89,11 +189,26 @@ def setup_consensus(config):
 
     return ConsensusGaussNewton(cgn_config)
 
-def run_consensus_simulation(config_path):
+def run_consensus_simulation(config_path, args=None):
     """Run consensus simulation from YAML config"""
 
     print(f"Loading configuration from {config_path}")
     config = load_config(config_path)
+
+    # Override config with command-line arguments if provided
+    if args:
+        if args.no_plot:
+            config.setdefault('output', {})['no_show'] = True
+            config['output']['plot_network'] = False
+            config['output']['plot_errors'] = False
+        if args.save_plot:
+            config.setdefault('output', {})['save_positions'] = True
+        if args.output_dir:
+            config.setdefault('output', {})['output_dir'] = args.output_dir
+        if args.seed is not None:
+            config.setdefault('simulation', {})['random_seed'] = args.seed
+        if args.verbose:
+            config.setdefault('simulation', {})['verbose'] = True
 
     # Set random seed
     seed = config.get('simulation', {}).get('random_seed', 42)
@@ -243,22 +358,51 @@ def run_consensus_simulation(config_path):
 
         print(f"\nResults saved to {output_dir}")
 
+    # Generate plots if configured
+    if config.get('output', {}).get('plot_network', True) or \
+       config.get('output', {}).get('plot_errors', True):
+        # Collect estimated positions
+        estimated_positions = np.zeros((n_nodes, 2))
+        for i in range(n_nodes):
+            estimated_positions[i] = cgn.nodes[i].state[:2]
+
+        # Create plots
+        fig = plot_results(true_positions, estimated_positions, n_anchors,
+                          comm_range, results, config)
+
+        # Save plot if configured
+        if config.get('output', {}).get('save_positions', False):
+            plot_path = output_dir / 'consensus_results.png'
+            fig.savefig(plot_path, dpi=150, bbox_inches='tight')
+            print(f"Plot saved to {plot_path}")
+
+        # Show plot unless explicitly disabled
+        if not config.get('output', {}).get('no_show', False):
+            plt.show()
+
     return results, cgn
 
 def main():
     """Main entry point"""
-    if len(sys.argv) < 2:
-        print("Usage: python run_yaml_config.py <config.yaml>")
-        sys.exit(1)
+    import argparse
 
-    config_path = sys.argv[1]
+    parser = argparse.ArgumentParser(description='Run FTL consensus simulation from YAML config')
+    parser.add_argument('config', help='YAML configuration file')
+    parser.add_argument('--no-plot', action='store_true', help='Disable plotting')
+    parser.add_argument('--save-plot', action='store_true', help='Save plot to file')
+    parser.add_argument('--output-dir', help='Output directory for results')
+    parser.add_argument('--seed', type=int, help='Random seed')
+    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+
+    args = parser.parse_args()
+    config_path = args.config
 
     if not Path(config_path).exists():
         print(f"Error: Config file {config_path} not found")
         sys.exit(1)
 
     try:
-        results, cgn = run_consensus_simulation(config_path)
+        results, cgn = run_consensus_simulation(config_path, args)
 
         # Return success/failure based on convergence
         if results.get('converged', False):

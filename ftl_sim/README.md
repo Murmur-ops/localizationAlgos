@@ -88,11 +88,18 @@ Edit `configs/scene.yaml` to customize:
 
 ## Documentation
 
-For detailed information, see:
-- `COMPREHENSIVE_PROJECT_DOCUMENTATION.md` - Full system documentation
-- `FTL_SYSTEM_END_TO_END_REPORT.md` - Technical details
-- `30_NODE_PERFORMANCE_REPORT.md` - Performance analysis
-- `CONSENSUS_AUDIT.md` - Distributed consensus implementation
+### Quick Reference
+- `README.md` - This file (getting started)
+- `FTL_SYSTEM_END_TO_END_REPORT.md` - System overview and technical details
+- `30_NODE_PERFORMANCE_REPORT.md` - Performance benchmarks
+- `IMPLEMENTATION_COMPLETE.md` - Implementation summary
+
+### Detailed Documentation
+- `docs/technical/` - In-depth technical documentation
+  - `COMPREHENSIVE_PROJECT_DOCUMENTATION.md` - Full system documentation
+  - `OBSERVABILITY_AND_GAUGES.md` - Observability theory
+  - `UNITS_CONVENTION.md` - Units and scaling
+- `docs/archive/` - Historical development and audit documents
 
 ## Project Structure
 
