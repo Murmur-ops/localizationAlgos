@@ -85,13 +85,14 @@ class TestToAFactorMeters:
         assert abs(J_xj[1] + 0.8) < 1e-10
 
     def test_jacobian_clock_bias(self):
-        """Test Jacobian w.r.t. clock bias"""
+        """Test Jacobian w.r.t. clock bias and drift"""
         xi = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
         xj = np.array([10.0, 0.0, 0.0, 0.0, 0.0])
 
         factor = ToAFactorMeters(i=0, j=1, range_meas_m=10.0, range_var_m2=0.01)
 
-        J_xi, J_xj = factor.jacobian(xi, xj)
+        # Test with delta_t = 0 (no drift contribution)
+        J_xi, J_xj = factor.jacobian(xi, xj, delta_t=0.0)
 
         # ∂r/∂bi should be c * 1e-9 (positive for node i)
         c_ns = 299792458.0 * 1e-9  # meters per nanosecond
@@ -100,9 +101,13 @@ class TestToAFactorMeters:
         # ∂r/∂bj should be -c * 1e-9 (negative for node j)
         assert abs(J_xj[2] + c_ns) < 1e-6
 
-        # Drift and CFO should not affect single ToA
+        # Drift should be zero with delta_t = 0
         assert J_xi[3] == 0.0
+        assert J_xj[3] == 0.0
+
+        # CFO should not affect ToA
         assert J_xi[4] == 0.0
+        assert J_xj[4] == 0.0
 
     def test_whitening(self):
         """Test that whitening produces unit variance residuals"""

@@ -138,11 +138,11 @@ class ConsensusNode:
 
                 # Add to normal equations (only our part)
                 if factor.i == self.config.node_id:
-                    H += np.outer(Ji_wh, Ji_wh)  # J^T @ J for 1D residual
-                    g += Ji_wh * r_wh  # J^T @ r for 1D residual
+                    H += np.outer(Ji_wh, Ji_wh)  # For scalar residual, J^T @ J equals outer(J, J)
+                    g += Ji_wh * r_wh  # Gradient contribution
                 else:
-                    H += np.outer(Jj_wh, Jj_wh)  # J^T @ J for 1D residual
-                    g += Jj_wh * r_wh  # J^T @ r for 1D residual
+                    H += np.outer(Jj_wh, Jj_wh)  # For scalar residual, J^T @ J equals outer(J, J)
+                    g += Jj_wh * r_wh  # Gradient contribution
 
             elif isinstance(factor, ClockPriorFactor):
                 if factor.node_id != self.config.node_id:

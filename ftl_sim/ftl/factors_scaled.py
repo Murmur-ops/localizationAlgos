@@ -35,7 +35,7 @@ class ScaledState:
 
 
 class ScaledFactor:
-    """Base class for scaled factors"""
+    """Base class for scaled factors with proper SRIF whitening"""
 
     def __init__(self, variance: float):
         """
@@ -44,11 +44,19 @@ class ScaledFactor:
         """
         self.variance = variance
         self.information = 1.0 / variance if variance > 0 else 1e10
-        self.std = np.sqrt(variance)
+        self.std = np.sqrt(variance) if variance > 0 else 1e-5  # Avoid division by zero
+
+        # Square root of information matrix (L such that L^T L = Information)
+        # For scalar case, this is just 1/std
+        # This implements proper Square Root Information Form (SRIF)
+        self.sqrt_information = 1.0 / self.std if self.std > 0 else np.sqrt(1e10)
 
     def whiten(self, residual: float) -> float:
         """
-        Whiten residual by information square root
+        Whiten residual by square root of information matrix (SRIF)
+
+        In SRIF, we transform: r_whitened = L * r
+        where L^T L = Σ^(-1) (information matrix)
 
         Args:
             residual: Raw residual
@@ -56,11 +64,13 @@ class ScaledFactor:
         Returns:
             Whitened residual (should be ~N(0,1) if model is correct)
         """
-        return residual / self.std
+        return residual * self.sqrt_information
 
     def whiten_jacobian(self, jacobian: np.ndarray) -> np.ndarray:
         """
-        Whiten Jacobian by information square root
+        Whiten Jacobian by square root of information matrix (SRIF)
+
+        In SRIF, we transform: J_whitened = L * J
 
         Args:
             jacobian: Raw Jacobian
@@ -68,7 +78,7 @@ class ScaledFactor:
         Returns:
             Whitened Jacobian
         """
-        return jacobian / self.std
+        return jacobian * self.sqrt_information
 
 
 class ToAFactorMeters(ScaledFactor):
@@ -94,13 +104,14 @@ class ToAFactorMeters(ScaledFactor):
         self.range_meas_m = range_meas_m
         self.c = 299792458.0  # Speed of light in m/s
 
-    def residual(self, xi: np.ndarray, xj: np.ndarray) -> float:
+    def residual(self, xi: np.ndarray, xj: np.ndarray, delta_t: float = 1.0) -> float:
         """
         Compute residual in meters
 
         Args:
             xi: State of node i [x_m, y_m, bias_ns, drift_ppb, cfo_ppm]
             xj: State of node j [x_m, y_m, bias_ns, drift_ppb, cfo_ppm]
+            delta_t: Time elapsed since reference epoch (seconds)
 
         Returns:
             Residual in meters (measurement - prediction)
@@ -109,9 +120,11 @@ class ToAFactorMeters(ScaledFactor):
         pi = xi[:2]
         pj = xj[:2]
 
-        # Extract clock biases (nanoseconds)
-        bi_ns = xi[2]
+        # Extract clock parameters
+        bi_ns = xi[2]  # bias in nanoseconds
         bj_ns = xj[2]
+        di_ppb = xi[3]  # drift in ppb (parts per billion)
+        dj_ppb = xj[3]
 
         # Predicted range (meters)
         geometric_range = np.linalg.norm(pi - pj)
@@ -120,14 +133,23 @@ class ToAFactorMeters(ScaledFactor):
         # (bj - bi) nanoseconds * c meters/second * 1e-9 seconds/nanosecond
         clock_contribution = (bj_ns - bi_ns) * self.c * 1e-9
 
-        predicted_range = geometric_range + clock_contribution
+        # Clock drift contribution in meters
+        # drift in ppb * time in seconds * c meters/second * 1e-9
+        drift_contribution = (dj_ppb - di_ppb) * delta_t * self.c * 1e-9
+
+        predicted_range = geometric_range + clock_contribution + drift_contribution
 
         # Residual in meters
         return self.range_meas_m - predicted_range
 
-    def jacobian(self, xi: np.ndarray, xj: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def jacobian(self, xi: np.ndarray, xj: np.ndarray, delta_t: float = 1.0) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute Jacobian of residual w.r.t. states
+
+        Args:
+            xi: State of node i [x_m, y_m, bias_ns, drift_ppb, cfo_ppm]
+            xj: State of node j [x_m, y_m, bias_ns, drift_ppb, cfo_ppm]
+            delta_t: Time elapsed since reference epoch (seconds)
 
         Returns:
             (J_xi, J_xj): Jacobians w.r.t. node i and j states
@@ -150,7 +172,7 @@ class ToAFactorMeters(ScaledFactor):
         J_xi[0] = u[0]                    # ∂r/∂xi in meters/meter
         J_xi[1] = u[1]                    # ∂r/∂yi in meters/meter
         J_xi[2] = self.c * 1e-9          # ∂r/∂bi in meters/nanosecond
-        J_xi[3] = 0.0                    # ∂r/∂di (drift doesn't affect single measurement)
+        J_xi[3] = self.c * delta_t * 1e-9  # ∂r/∂di in meters/ppb (NEW: drift term)
         J_xi[4] = 0.0                    # ∂r/∂fi (CFO doesn't affect ToA directly)
 
         # Jacobian w.r.t. node j state
@@ -158,20 +180,25 @@ class ToAFactorMeters(ScaledFactor):
         J_xj[0] = -u[0]                   # ∂r/∂xj
         J_xj[1] = -u[1]                   # ∂r/∂yj
         J_xj[2] = -self.c * 1e-9         # ∂r/∂bj
-        J_xj[3] = 0.0                    # ∂r/∂dj
+        J_xj[3] = -self.c * delta_t * 1e-9 # ∂r/∂dj (NEW: drift term)
         J_xj[4] = 0.0                    # ∂r/∂fj
 
         return J_xi, J_xj
 
-    def whitened_residual_and_jacobian(self, xi: np.ndarray, xj: np.ndarray) -> Tuple[float, np.ndarray, np.ndarray]:
+    def whitened_residual_and_jacobian(self, xi: np.ndarray, xj: np.ndarray, delta_t: float = 1.0) -> Tuple[float, np.ndarray, np.ndarray]:
         """
         Compute whitened (normalized) residual and Jacobian
+
+        Args:
+            xi: State of node i
+            xj: State of node j
+            delta_t: Time elapsed since reference epoch (seconds)
 
         Returns:
             (r_whitened, J_xi_whitened, J_xj_whitened)
         """
-        r = self.residual(xi, xj)
-        J_xi, J_xj = self.jacobian(xi, xj)
+        r = self.residual(xi, xj, delta_t)
+        J_xi, J_xj = self.jacobian(xi, xj, delta_t)
 
         # Whiten by dividing by std
         r_wh = self.whiten(r)
@@ -278,7 +305,7 @@ class TDOAFactorMeters(ScaledFactor):
 
 class ClockPriorFactor(ScaledFactor):
     """
-    Prior factor for clock parameters
+    Prior factor for clock parameters with proper SRIF implementation
     """
 
     def __init__(self, node_id: int, bias_ns: float, drift_ppb: float,
@@ -299,8 +326,10 @@ class ClockPriorFactor(ScaledFactor):
         self.prior_bias = bias_ns
         self.prior_drift = drift_ppb
 
-        # Compute information matrix (inverse covariance)
-        self.L_info = np.linalg.cholesky(np.linalg.inv(self.cov))
+        # Compute square root of information matrix using Cholesky decomposition
+        # This is the proper SRIF form: L such that L^T L = Σ^(-1)
+        info_matrix = np.linalg.inv(self.cov)
+        self.L_info = np.linalg.cholesky(info_matrix)
 
     def residual(self, x: np.ndarray) -> np.ndarray:
         """

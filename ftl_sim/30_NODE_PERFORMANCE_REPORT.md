@@ -37,6 +37,13 @@ This report presents the performance analysis of the distributed Consensus-Gauss
 
 ### 2.1 Accuracy Metrics
 
+**Test Conditions**:
+- **SNR**: 40 dB (ideal, high SNR)
+- **Measurement noise**: 1 cm standard deviation
+- **Network**: 30 nodes (25 unknown, 5 anchors)
+- **Area**: 50×50 meters
+- **Channel**: Line-of-sight, no multipath
+
 | Configuration | RMSE (cm) | Mean Error (cm) | Max Error (cm) | Iterations |
 |---------------|-----------|-----------------|----------------|------------|
 | **4 corner anchors** | 8.9 | 8.0 | 18.4 | 200* |
@@ -47,6 +54,8 @@ This report presents the performance analysis of the distributed Consensus-Gauss
 | **No consensus baseline** | 1.6 | 1.4 | 3.8 | 200 |
 
 *Did not fully converge within iteration limit
+
+**Note**: These results represent best-case performance under ideal conditions. Real-world deployments with multipath, NLOS, and lower SNR will show degraded performance.
 
 ### 2.2 Convergence Analysis
 
@@ -185,7 +194,7 @@ The system is ready for deployment in applications requiring high-precision coll
 - Industrial IoT monitoring
 
 ### Key Achievement
-**The implementation successfully transforms a challenging distributed localization problem into a tractable optimization that achieves sub-centimeter accuracy through peer-to-peer collaboration, without requiring central coordination.**
+**Under ideal conditions (40 dB SNR, LOS, 1cm measurement noise), the implementation successfully transforms a challenging distributed localization problem into a tractable optimization that achieves sub-centimeter accuracy (0.9 cm RMSE) through peer-to-peer collaboration, without requiring central coordination.**
 
 ---
 
