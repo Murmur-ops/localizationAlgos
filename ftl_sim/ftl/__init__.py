@@ -9,7 +9,12 @@ from .clocks import ClockModel, ClockState
 from .signal import gen_hrp_burst, gen_zc_burst, SignalConfig
 from .channel import SalehValenzuelaChannel, ChannelConfig, propagate_signal
 from .rx_frontend import matched_filter, detect_toa, estimate_cfo, toa_crlb
-from .factors import ToAFactor, TDOAFactor, TWRFactor, CFOFactor
+# Import old factors from factors.py if they exist
+try:
+    from .factors import ToAFactor, TDOAFactor, TWRFactor, CFOFactor
+except ImportError:
+    # Placeholder if old factors don't exist
+    ToAFactor = TDOAFactor = TWRFactor = CFOFactor = None
 from .robust import huber_weight, dcs_weight, RobustConfig
 from .solver import FactorGraph
 from .init import trilateration, mds, grid_search, initialize_positions, initialize_clock_states
