@@ -1,0 +1,155 @@
+# Unified FTL Configuration
+# Combines RF signal simulation with distributed consensus
+# Best of both worlds: Realistic measurements + Scalable solving
+
+# ============================================
+# SHARED GEOMETRY CONFIGURATION
+# ============================================
+geometry:
+  n_nodes: 25  # 5×5 grid of unknown nodes
+  n_anchors: 5  # 4 corners + 1 center
+  area_size: 50.0  # 50×50 meter area
+  jitter_std: 0.0  # Perfect grid for ideal conditions
+  anchor_placement: corners  # corner anchors + center
+
+# ============================================
+# RF SIGNAL SIMULATION (from scene.yaml)
+# ============================================
+rf_simulation:
+  # Clock Configuration
+  clocks:
+    unknown_nodes:
+      oscillator_type: TCXO
+      frequency_accuracy_ppm: 2.0
+      allan_deviation_1s: 1e-10
+      initial_bias_std: 1e-9  # 1 ns (ideal conditions)
+      initial_drift_std: 1e-12  # Very low drift
+      initial_cfo_std: 1.0  # 1 Hz CFO
+
+    anchor_nodes:
+      oscillator_type: OCXO  # Better clocks for anchors
+      frequency_accuracy_ppm: 0.1
+      allan_deviation_1s: 1e-11
+      initial_bias_std: 1e-10  # 0.1 ns
+      initial_drift_std: 1e-13
+      initial_cfo_std: 0.1  # 0.1 Hz
+
+  # Signal Configuration
+  signal:
+    type: hrp_uwb  # IEEE 802.15.4z HRP-UWB
+    carrier_freq: 6.5e9  # 6.5 GHz
+    bandwidth: 499.2e6  # ~500 MHz
+    sample_rate: 1e9  # 1 GHz sampling
+    burst_duration: 1e-6  # 1 microsecond burst
+    prf: 124.8e6  # Pulse repetition frequency
+    snr_db: 30.0  # High SNR for ideal conditions (was 40 in ideal_30node)
+
+  # Channel Configuration
+  channel:
+    environment: indoor  # Indoor propagation
+    cluster_arrival_rate: 0.0233  # Saleh-Valenzuela model
+    ray_arrival_rate: 0.4
+    cluster_decay_factor: 10.0
+    ray_decay_factor: 5.0
+    k_factor_db: 10.0  # Strong LOS component
+    nlos_excess_delay_mean_ns: 15.0
+    nlos_excess_delay_std_ns: 5.0
+    path_loss_exponent: 2.0
+    shadowing_std_db: 2.0  # Low shadowing
+
+  # Simulation Parameters
+  simulation:
+    n_rounds: 5  # Multiple measurement rounds
+    round_interval: 0.1  # 100ms between rounds
+    max_range: 35.0  # Communication range (meters)
+    los_probability: 0.95  # Mostly LOS for ideal conditions
+    measurement_noise_scale: 1.0
+    enable_multipath: true  # Keep multipath for realism
+    enable_clock_drift: true
+
+# ============================================
+# DISTRIBUTED CONSENSUS (from ideal_30node.yaml)
+# ============================================
+consensus:
+  # Communication range for consensus
+  comm_range: 25.0  # meters (half the area for good connectivity)
+
+  # Consensus algorithm parameters
+  parameters:
+    max_iterations: 300
+    consensus_gain: 0.05  # μ - optimal for accuracy
+    step_size: 0.3  # α - conservative
+    gradient_tol: 1e-3  # Relaxed from ideal_30node
+    step_tol: 1e-4  # Achievable tolerance
+    damping_lambda: 1e-4  # Levenberg-Marquardt
+    verbose: false  # Set to true for iteration details
+
+  # Initialization
+  initialization:
+    position_noise_std: 0.5  # 50 cm initial position uncertainty
+    clock_bias_std: 1e-9  # 1 ns
+    clock_drift_std: 1e-12
+
+  # State scaling for numerical stability
+  state_scale: [1.0, 1.0, 1.0, 0.1, 0.1]  # [x, y, bias, drift, cfo]
+
+  # Network validation
+  min_neighbors: 2  # Minimum neighbors for unknowns
+  require_anchor_path: true  # Each unknown needs path to anchor
+
+# ============================================
+# OUTPUT CONFIGURATION
+# ============================================
+output:
+  save_results: true
+  output_dir: ./results/unified/
+  save_plots: true
+  plot_format: png
+
+  # Metrics to track
+  metrics_to_compute:
+    - position_rmse
+    - position_mae
+    - clock_bias_mae
+    - convergence_iterations
+    - rf_measurement_quality  # SNR, multipath statistics
+
+# ============================================
+# PERFORMANCE BENCHMARKS
+# ============================================
+benchmarks:
+  # Expected performance with RF + Consensus
+  expected:
+    rmse_cm: 1.5  # Slightly worse than pure ideal due to RF effects
+    iterations: 300
+    convergence_time_s: 3.0
+
+  # Thresholds for success
+  thresholds:
+    max_rmse_cm: 3.0  # Fail if RMSE > 3 cm
+    max_iterations: 500
+    max_time_s: 10.0
+
+  # Comparison baselines
+  baselines:
+    rf_centralized_rmse_cm: 1.0  # Centralized solver with same RF
+    consensus_ideal_rmse_cm: 0.9  # Consensus with perfect measurements
+    unified_target_rmse_cm: 1.5  # Our target with RF + Consensus
+
+# ============================================
+# EXPERIMENTAL NOTES
+# ============================================
+# This configuration unifies:
+# 1. Realistic RF signal generation (multipath, noise, clock errors)
+# 2. Distributed consensus solving (peer-to-peer, no central server)
+#
+# The result is a complete end-to-end system that:
+# - Generates UWB signals with realistic propagation
+# - Extracts ToA/CFO measurements with proper error models
+# - Solves using distributed consensus for scalability
+#
+# Key advantages:
+# - Tests consensus with realistic RF impairments
+# - Validates complete system performance
+# - Enables comparison of centralized vs distributed with same data
+# - Research-ready for testing robustness to channel conditions

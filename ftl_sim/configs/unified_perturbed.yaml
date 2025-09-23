@@ -1,0 +1,140 @@
+# Unified FTL Configuration - WITH INITIAL PERTURBATION
+# Same as ideal but with larger initial position errors to demonstrate convergence
+
+# ============================================
+# SHARED GEOMETRY CONFIGURATION
+# ============================================
+geometry:
+  n_nodes: 25  # 5×5 grid of unknown nodes
+  n_anchors: 5  # 4 corners + 1 center
+  area_size: 50.0  # 50×50 meter area
+  jitter_std: 0.0  # Perfect grid
+  anchor_placement: corners  # corner anchors + center
+
+# ============================================
+# RF SIGNAL SIMULATION - IDEAL CONDITIONS
+# ============================================
+rf_simulation:
+  # Clock Configuration - Near-perfect clocks
+  clocks:
+    unknown_nodes:
+      oscillator_type: TCXO
+      frequency_accuracy_ppm: 0.1  # Very accurate
+      allan_deviation_1s: 1e-11  # Very stable
+      initial_bias_std: 1e-10  # 0.1 ns
+      initial_drift_std: 1e-13  # Minimal drift
+      initial_cfo_std: 0.01  # 0.01 Hz CFO
+
+    anchor_nodes:
+      oscillator_type: OCXO  # Perfect reference clocks
+      frequency_accuracy_ppm: 0.01
+      allan_deviation_1s: 1e-12
+      initial_bias_std: 1e-11  # 0.01 ns
+      initial_drift_std: 1e-14
+      initial_cfo_std: 0.001  # 0.001 Hz
+
+  # Signal Configuration - High quality
+  signal:
+    type: hrp_uwb  # IEEE 802.15.4z HRP-UWB
+    carrier_freq: 6.5e9  # 6.5 GHz
+    bandwidth: 499.2e6  # ~500 MHz
+    sample_rate: 1e9  # 1 GHz sampling
+    burst_duration: 1e-6  # 1 microsecond burst
+    prf: 124.8e6  # Pulse repetition frequency
+    snr_db: 50.0  # VERY high SNR for ideal conditions
+
+  # Channel Configuration - Near-ideal propagation
+  channel:
+    environment: indoor  # Indoor propagation
+    cluster_arrival_rate: 0.0233  # Minimal multipath
+    ray_arrival_rate: 0.4
+    cluster_decay_factor: 10.0
+    ray_decay_factor: 5.0
+    k_factor_db: 20.0  # Very strong LOS component
+    nlos_excess_delay_mean_ns: 5.0  # Minimal NLOS delay
+    nlos_excess_delay_std_ns: 1.0
+    path_loss_exponent: 2.0  # Free space
+    shadowing_std_db: 0.5  # Minimal shadowing
+
+  # Simulation Parameters
+  simulation:
+    n_rounds: 3  # Fewer rounds needed for ideal
+    round_interval: 0.1  # 100ms between rounds
+    max_range: 100.0  # Long range in ideal conditions
+    los_probability: 1.0  # Always LOS
+    measurement_noise_scale: 0.0  # ZERO NOISE - perfect measurements
+    enable_multipath: false  # No multipath in ideal
+    enable_clock_drift: false  # No drift in ideal
+
+# ============================================
+# DISTRIBUTED CONSENSUS
+# ============================================
+consensus:
+  # Communication range for consensus
+  comm_range: 100.0  # Full connectivity in ideal
+
+  # Consensus algorithm parameters
+  parameters:
+    max_iterations: 100  # Should converge quickly in ideal
+    consensus_gain: 0.05  # μ - optimal for accuracy
+    step_size: 0.5  # α - can be more aggressive in ideal
+    gradient_tol: 1e-4  # Good tolerance
+    step_tol: 1e-5  # Tight tolerance
+    damping_lambda: 1e-6  # Minimal damping needed
+    verbose: false
+
+  # Initialization - LARGE INITIAL ERRORS TO SEE CONVERGENCE
+  initialization:
+    position_noise_std: 5.0  # 5 METERS initial error (very large!)
+    clock_bias_std: 10e-9  # 10 ns initial error
+    clock_drift_std: 1e-13
+
+  # State scaling for numerical stability
+  state_scale: [1.0, 1.0, 1.0, 0.1, 0.1]  # [x, y, bias, drift, cfo]
+
+  # Network validation
+  min_neighbors: 2
+  require_anchor_path: true
+
+# ============================================
+# OUTPUT CONFIGURATION
+# ============================================
+output:
+  save_results: true
+  output_dir: ./results/unified/
+  save_plots: true
+  plot_format: png
+
+  # Metrics to track
+  metrics_to_compute:
+    - position_rmse
+    - position_mae
+    - clock_bias_mae
+    - convergence_iterations
+
+# ============================================
+# PERFORMANCE BENCHMARKS
+# ============================================
+benchmarks:
+  # Expected performance in ideal conditions
+  expected:
+    rmse_cm: 0.1  # Sub-cm in ideal
+    iterations: 50
+    convergence_time_s: 0.5
+
+  # Thresholds for success
+  thresholds:
+    max_rmse_cm: 1.0  # Fail if RMSE > 1 cm
+    max_iterations: 100
+    max_time_s: 5.0
+
+# ============================================
+# NOTES
+# ============================================
+# This configuration tests convergence with large initial errors:
+# - 5 meter initial position errors
+# - 10 ns initial clock bias errors
+# - Otherwise ideal conditions
+#
+# This should show clear convergence curves as nodes
+# move from very wrong positions to accurate ones.

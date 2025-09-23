@@ -138,8 +138,8 @@ consensus:
     max_iterations: 500
     consensus_gain: 0.05  # μ - optimal for accuracy
     step_size: 0.3  # α - conservative
-    gradient_tol: 1.0e-5
-    step_tol: 1.0e-6
+    gradient_tol: 1.0e-3  # Relaxed: was 1e-5, now more realistic
+    step_tol: 1.0e-4      # Relaxed: was 1e-6, now achievable
     damping_lambda: 1.0e-4  # Levenberg-Marquardt
 
   # Fast convergence parameters

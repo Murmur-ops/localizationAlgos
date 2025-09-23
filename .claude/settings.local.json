@@ -34,7 +34,8 @@
       "Read(//Users/maxburnett/Documents/RadarSim//**)",
       "Bash(for:*)",
       "Bash(done)",
-      "Bash(while read demo)"
+      "Bash(while read demo)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": []
   }
